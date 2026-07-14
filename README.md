@@ -19,6 +19,11 @@ Plugin API at `{CMS_URL}/__cms/*`.
   built-in importer had. Tags are created on demand. Large files apply in budgeted
   passes with a "Continue import" step so a single request never blows the Worker
   subrequest cap.
+- **Multi-type imports**: each row's `page_type` column overrides the import page's
+  type — matching, blueprint columns and creation all follow the row's own type, so an
+  "Export all page types" file round-trips through "Import all page types". Rows with
+  a missing or unknown `page_type` are skipped (a typo can never mint a junk type) and
+  reported on the preview screen.
 
 ## Setup
 

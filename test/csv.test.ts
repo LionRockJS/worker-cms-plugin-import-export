@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALL_PAGE_TYPES,
   buildExportCsv,
   csvFormatValue,
   csvImportMode,
   csvPathSpecs,
   csvRowsToObjects,
+  groupEntriesByType,
   matchImportTargets,
   parseCsv,
   prepareCreateFromRow,
   prepareUpdateFromRow,
   previewImportRows,
+  resolveImportEntries,
 } from '../src/csv';
 import type { CmsPage, ContentMeta } from '../src/cms';
 
@@ -121,27 +124,58 @@ describe('export', () => {
 });
 
 describe('import classify', () => {
+  const entriesFor = (rows: Array<Record<string, string>>, pageType = 'default') =>
+    resolveImportEntries(meta, rows, pageType).entries;
+
   it('matches rows to existing pages by id first, then slug', () => {
     const existing = [page({ id: 7, slug: 'seven' }), page({ id: 8, slug: 'eight' })];
-    const rows = [
+    const entries = entriesFor([
       { id: '7', slug: 'eight', name: 'ByIdWins' },
       { id: '', slug: 'eight', name: 'BySlug' },
       { id: '', slug: 'nine', name: 'NoMatch' },
-    ];
-    const targets = matchImportTargets(rows, existing);
-    expect(targets.get(0)?.id).toBe(7);
-    expect(targets.get(1)?.id).toBe(8);
-    expect(targets.has(2)).toBe(false);
+    ]);
+    const targets = matchImportTargets(entries, existing);
+    expect(targets.get(2)?.id).toBe(7);
+    expect(targets.get(3)?.id).toBe(8);
+    expect(targets.has(4)).toBe(false);
   });
 
   it('previews creates vs updates and skips empty rows', () => {
     const existing = [page({ id: 7, slug: 'seven', name: 'Seven' })];
     const rows = csvRowsToObjects(parseCsv('name,slug\nNew Page,new-page\nSeven Updated,seven\n,\n'));
-    const targets = matchImportTargets(rows, existing);
-    const preview = previewImportRows(meta, 'default', rows, targets);
-    expect(preview.rows).toHaveLength(2);
-    expect(preview.rows[0]).toMatchObject({ action: 'create', name: 'New Page', slug: 'new-page' });
-    expect(preview.rows[1]).toMatchObject({ action: 'update', existingId: 7 });
+    const { entries, skippedEmpty } = resolveImportEntries(meta, rows, 'default');
+    const targets = matchImportTargets(entries, existing);
+    const preview = previewImportRows(meta, entries, targets);
+    expect(skippedEmpty).toBe(0); // parseCsv already drops fully empty lines
+    expect(preview).toHaveLength(2);
+    expect(preview[0]).toMatchObject({ action: 'create', name: 'New Page', slug: 'new-page', pageType: 'default' });
+    expect(preview[1]).toMatchObject({ action: 'update', existingId: 7 });
+  });
+
+  it("honors each row's page_type column over the import page's type", () => {
+    const mixedMeta: ContentMeta = { ...meta, page_types: ['default', 'guest'] };
+    const rows: Array<Record<string, string>> = [
+      { name: 'Plain', slug: 'plain' },
+      { name: 'A Guest', slug: 'a-guest', page_type: 'guest' },
+      { name: 'Typo', slug: 'typo', page_type: 'geust' },
+    ];
+    const { entries, skippedUnknownType } = resolveImportEntries(mixedMeta, rows, 'default');
+    expect(entries.map((entry) => entry.pageType)).toEqual(['default', 'guest']);
+    expect(skippedUnknownType).toBe(1);
+
+    const groups = groupEntriesByType(entries);
+    expect([...groups.keys()].sort()).toEqual(['default', 'guest']);
+  });
+
+  it('requires a valid page_type per row in all-types mode', () => {
+    const { entries, skippedUnknownType } = resolveImportEntries(
+      meta,
+      [{ name: 'No Type', slug: 'no-type' }, { name: 'Typed', slug: 'typed', page_type: 'default' }],
+      ALL_PAGE_TYPES,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0].pageType).toBe('default');
+    expect(skippedUnknownType).toBe(1);
   });
 });
 

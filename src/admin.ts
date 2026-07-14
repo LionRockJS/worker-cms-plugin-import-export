@@ -16,25 +16,28 @@
 // carried in a hidden field (small, and the server re-validates everything).
 // ============================================================
 
-import { adminView, notFoundView, parseCmsUser, redirect } from '@lionrockjs/worker-cms-plugin';
+import { adminView, notFoundView, parseCmsUser, redirect, serveViewAsset } from '@lionrockjs/worker-cms-plugin';
 import { CmsApiError, CmsClient, CREATE_BATCH_SIZE, chunk, tagKey, type CmsPage, type ContentMeta, type SearchCriterion } from './cms';
 import {
+  ALL_PAGE_TYPES,
   buildExportCsv,
   csvDownloadResponse,
   csvImportMode,
   csvImportModeOptions,
   csvPathSpecs,
-  csvRowHasValues,
   csvRowsToObjects,
   exportHeaders,
+  groupEntriesByType,
   importRowId,
   matchImportTargets,
   parseCsv,
   prepareCreateFromRow,
   prepareUpdateFromRow,
   previewImportRows,
+  resolveImportEntries,
   rowTagEntries,
   type CsvImportMode,
+  type CsvRowEntry,
   type PreparedCreate,
 } from './csv';
 
@@ -53,6 +56,13 @@ const WRITE_BUDGET = 40;
 export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Promise<Response> {
   const rest = url.pathname.slice('/__plugin/admin'.length).replace(/^\/+|\/+$/g, '');
   const segments = rest.split('/').filter(Boolean);
+
+  // Browser-fetched client-view files: the host proxies
+  // /admin/plugins/import-export/views/* here as /__plugin/admin/views/*.
+  if (segments[0] === 'views') {
+    return serveViewAsset(env.VIEWS, `/${segments.slice(1).join('/')}`);
+  }
+
   const user = parseCmsUser(request.headers.get('x-cms-user'));
 
   let cms: CmsClient;
@@ -106,6 +116,7 @@ async function home(cms: CmsClient, env: AdminEnv): Promise<Response> {
       listHref: `/admin/pages/list/${encodeURIComponent(pageType)}`,
     })),
     exportAllHref: `${BASE}/export`,
+    importAllHref: `${BASE}/import/${ALL_PAGE_TYPES}`,
   });
 }
 
@@ -208,15 +219,57 @@ function parseSearchCriteria(url: URL): SearchCriterion[] {
 
 // ── Import ───────────────────────────────────────────────────────────────────
 
+/** Label + back link for an import scope ('all' = the mixed, all-types mode). */
+function importScope(pageType: string): { isAll: boolean; label: string; backHref: string } {
+  const isAll = pageType === ALL_PAGE_TYPES;
+  return {
+    isAll,
+    label: isAll ? 'all page types' : pageType,
+    backHref: isAll ? '/admin/pages/list' : `/admin/pages/list/${encodeURIComponent(pageType)}`,
+  };
+}
+
 async function importForm(cms: CmsClient, env: AdminEnv, pageType: string): Promise<Response> {
-  const meta = await cms.meta([pageType]);
-  return adminView(env.VIEWS, `Import ${pageType}`, 'import', {
-    pageType,
+  const scope = importScope(pageType);
+  const meta = await cms.meta(scope.isAll ? 'all' : [pageType]);
+  // The all-types sample shows only the shared columns — each row picks its
+  // blueprint columns via its page_type value.
+  const sampleColumns = scope.isAll ? [] : csvPathSpecs(meta, [pageType]);
+  return adminView(env.VIEWS, `Import ${scope.label}`, 'import', {
+    pageType: scope.label,
     isConfirmImport: false,
+    isAllTypes: scope.isAll,
     action: `${BASE}/import/${encodeURIComponent(pageType)}`,
-    backHref: `/admin/pages/list/${encodeURIComponent(pageType)}`,
-    sampleCsvHeader: exportHeaders(csvPathSpecs(meta, [pageType]), meta.taxonomies).join(','),
+    backHref: scope.backHref,
+    sampleCsvHeader: exportHeaders(sampleColumns, meta.taxonomies).join(','),
   });
+}
+
+/**
+ * Rows resolved to types (a row's own page_type column wins over the URL's
+ * type) with per-type import targets, keyed by CSV row number.
+ */
+async function classifyEntries(
+  cms: CmsClient,
+  meta: ContentMeta,
+  rows: Array<Record<string, string>>,
+  pageType: string,
+  skipMatching = false,
+): Promise<{
+  entries: CsvRowEntry[];
+  targets: Map<number, CmsPage>;
+  skippedEmpty: number;
+  skippedUnknownType: number;
+}> {
+  const { entries, skippedEmpty, skippedUnknownType } = resolveImportEntries(meta, rows, pageType);
+  const targets = new Map<number, CmsPage>();
+  if (!skipMatching) {
+    for (const [type, group] of groupEntriesByType(entries)) {
+      const existing = await lookupTargets(cms, type, group);
+      for (const [rowNumber, page] of matchImportTargets(group, existing)) targets.set(rowNumber, page);
+    }
+  }
+  return { entries, targets, skippedEmpty, skippedUnknownType };
 }
 
 async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pageType: string): Promise<Response> {
@@ -230,38 +283,43 @@ async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pa
     return redirect(`${BASE}/import/${encodeURIComponent(pageType)}`);
   }
 
-  const meta = await cms.meta([pageType]);
+  const scope = importScope(pageType);
+  const meta = await cms.meta('all');
   const rows = csvRowsToObjects(parseCsv(csvText));
-  const targets = matchImportTargets(rows, await lookupTargets(cms, pageType, rows));
-  const preview = previewImportRows(meta, pageType, rows, targets);
-  const newRows = preview.rows.filter((row) => row.action === 'create');
-  const existingRows = preview.rows.filter((row) => row.action === 'update');
+  const { entries, targets, skippedEmpty, skippedUnknownType } = await classifyEntries(cms, meta, rows, pageType);
+  const previewRows = previewImportRows(meta, entries, targets);
+  const newRows = previewRows.filter((row) => row.action === 'create');
+  const existingRows = previewRows.filter((row) => row.action === 'update');
+  const typeCount = new Set(entries.map((entry) => entry.pageType)).size;
 
-  return adminView(env.VIEWS, `Confirm import ${pageType}`, 'import', {
-    pageType,
+  return adminView(env.VIEWS, `Confirm import ${scope.label}`, 'import', {
+    pageType: scope.label,
     isConfirmImport: true,
+    isAllTypes: scope.isAll,
+    showTypeColumn: scope.isAll || typeCount > 1,
     action: `${BASE}/import/${encodeURIComponent(pageType)}/confirm`,
-    backHref: `/admin/pages/list/${encodeURIComponent(pageType)}`,
+    backHref: scope.backHref,
     csvText,
-    previewRows: preview.rows,
+    previewRows,
     newRows,
     existingRows,
-    hasPreviewRows: preview.rows.length > 0,
+    hasPreviewRows: previewRows.length > 0,
     hasNewRows: newRows.length > 0,
     hasExistingRows: existingRows.length > 0,
-    previewCount: preview.rows.length,
+    previewCount: previewRows.length,
     newCount: newRows.length,
     existingCount: existingRows.length,
-    skippedCount: preview.skipped,
+    skippedCount: skippedEmpty + skippedUnknownType,
+    skippedUnknownType,
     importModeOptions: csvImportModeOptions(),
     hasImportModeOptions: true,
   });
 }
 
-async function lookupTargets(cms: CmsClient, pageType: string, rows: Array<Record<string, string>>): Promise<CmsPage[]> {
+async function lookupTargets(cms: CmsClient, pageType: string, entries: CsvRowEntry[]): Promise<CmsPage[]> {
   const ids: number[] = [];
   const slugs: string[] = [];
-  for (const row of rows) {
+  for (const { row } of entries) {
     const id = importRowId(row);
     if (id !== null) ids.push(id);
     const slug = row.slug?.trim();
@@ -285,15 +343,22 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
     return redirect(`${BASE}/import/${encodeURIComponent(pageType)}`);
   }
 
-  const meta = await cms.meta([pageType]);
+  const scope = importScope(pageType);
+  const meta = await cms.meta('all');
   const rows = csvRowsToObjects(parseCsv(csvText));
-  const remaining = rows.slice(offset);
-  const pathSpecs = csvPathSpecs(meta, [pageType], true);
   let writes = 0;
+
+  // `offset` counts importable entries already applied by earlier passes;
+  // skipped-row counts are folded in once, on the first pass.
+  const classified = await classifyEntries(cms, meta, rows, pageType, mode === 'force-new');
+  const { targets } = classified;
+  const remaining = classified.entries.slice(offset);
+  const result = { ...carried };
+  if (offset === 0) result.skipped += classified.skippedEmpty + classified.skippedUnknownType;
 
   // Idempotent across passes: re-ensure the tags the remaining rows mention.
   const tagEntries = new Map<string, { taxonomy: string; name: string }>();
-  for (const row of remaining) {
+  for (const { row } of remaining) {
     for (const entry of rowTagEntries(meta, row)) {
       tagEntries.set(tagKey(entry.taxonomy, entry.name), { taxonomy: entry.taxonomy, name: entry.name });
     }
@@ -302,14 +367,20 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
     ? await (async () => { writes += Math.ceil(tagEntries.size / 200); return cms.ensureTags([...tagEntries.values()]); })()
     : new Map<string, number>();
 
-  const targets = mode === 'force-new'
-    ? new Map<number, CmsPage>()
-    : matchImportTargets(remaining, await lookupTargets(cms, pageType, remaining));
+  const specsByType = new Map<string, ReturnType<typeof csvPathSpecs>>();
+  const pathSpecsFor = (type: string) => {
+    let specs = specsByType.get(type);
+    if (!specs) {
+      specs = csvPathSpecs(meta, [type], true);
+      specsByType.set(type, specs);
+    }
+    return specs;
+  };
 
-  const result = { ...carried };
   const pendingCreates: PreparedCreate[] = [];
   let processed = 0;
 
+  // The batch API accepts mixed page types, so one flush covers them all.
   const flushCreates = async () => {
     for (const part of chunk(pendingCreates, CREATE_BATCH_SIZE)) {
       const outcome = await cms.batchCreate(part);
@@ -320,22 +391,18 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
     pendingCreates.length = 0;
   };
 
-  for (const [index, row] of remaining.entries()) {
+  for (const [index, entry] of remaining.entries()) {
     // Reserve one write for the final create flush.
     if (writes >= WRITE_BUDGET - 1) break;
+    const { row, pageType: rowType } = entry;
+    const pathSpecs = pathSpecsFor(rowType);
 
-    if (!csvRowHasValues(row)) {
-      result.skipped++;
-      processed = index + 1;
-      continue;
-    }
-
-    const existing = targets.get(index) ?? null;
+    const existing = targets.get(entry.rowNumber) ?? null;
     if (!existing) {
       if (mode === 'append' || mode === 'overwrite') {
         result.skipped++;
       } else {
-        pendingCreates.push(prepareCreateFromRow(meta, pageType, row, pathSpecs, ensuredTags));
+        pendingCreates.push(prepareCreateFromRow(meta, rowType, row, pathSpecs, ensuredTags));
         if (pendingCreates.length >= CREATE_BATCH_SIZE) await flushCreates();
       }
       processed = index + 1;
@@ -349,7 +416,7 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
     }
 
     const updateMode = mode === 'append' || mode === 'new-append' ? 'append' : 'replace';
-    const update = prepareUpdateFromRow(meta, pageType, row, existing, pathSpecs, updateMode, ensuredTags);
+    const update = prepareUpdateFromRow(meta, rowType, row, existing, pathSpecs, updateMode, ensuredTags);
     if (!update.changed) {
       result.skipped++;
     } else {
@@ -363,14 +430,15 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
   await flushCreates();
 
   const nextOffset = offset + processed;
-  if (nextOffset < rows.length) {
-    return adminView(env.VIEWS, `Importing ${pageType}…`, 'import-progress', {
-      pageType,
+  if (nextOffset < classified.entries.length) {
+    return adminView(env.VIEWS, `Importing ${scope.label}…`, 'import-progress', {
+      pageType: scope.label,
       action: `${BASE}/import/${encodeURIComponent(pageType)}/confirm`,
+      backHref: scope.backHref,
       csvText,
       mode,
       offset: nextOffset,
-      totalRows: rows.length,
+      totalRows: classified.entries.length,
       created: result.created,
       updated: result.updated,
       skipped: result.skipped,
@@ -378,7 +446,7 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
   }
 
   const flash = `${result.created} created, ${result.updated} updated, ${result.skipped} skipped`;
-  return redirect(`/admin/pages/list/${encodeURIComponent(pageType)}?flash=${encodeURIComponent(flash)}`);
+  return redirect(`${scope.backHref}?flash=${encodeURIComponent(flash)}`);
 }
 
 function parsedCount(value: unknown): number {

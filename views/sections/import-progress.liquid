@@ -28,7 +28,7 @@
                 class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 cursor-pointer">
           Continue import
         </button>
-        <a href="/admin/pages/list/{{ pageType | escape }}"
+        <a href="{{ backHref | escape }}"
            class="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
           Stop for now
         </a>

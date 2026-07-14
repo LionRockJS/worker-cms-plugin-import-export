@@ -444,12 +444,68 @@ export function csvDownloadResponse(csv: string, filename: string): Response {
 
 export interface CsvImportPreviewRow {
   rowNumber: number;
+  pageType: string;
   action: 'create' | 'update';
   name: string;
   slug: string;
   existingId: number | null;
   existingName: string;
   existingSlug: string;
+}
+
+/** Sentinel page type for the mixed-type import mode ("Import all page types"). */
+export const ALL_PAGE_TYPES = 'all';
+
+/** One importable CSV row with its resolved page type. */
+export interface CsvRowEntry {
+  /** 1-based CSV line number (line 1 is the header). */
+  rowNumber: number;
+  row: Record<string, string>;
+  pageType: string;
+}
+
+/**
+ * Resolves each CSV row to a page type: the row's own `page_type` column wins,
+ * otherwise the import page's type (none in all-types mode). Empty rows and
+ * rows whose type is unknown/unreadable are skipped, so a typo in `page_type`
+ * can never mint a junk type.
+ */
+export function resolveImportEntries(
+  meta: ContentMeta,
+  rows: Array<Record<string, string>>,
+  fallbackType: string,
+): { entries: CsvRowEntry[]; skippedEmpty: number; skippedUnknownType: number } {
+  const validTypes = new Set(meta.page_types);
+  const entries: CsvRowEntry[] = [];
+  let skippedEmpty = 0;
+  let skippedUnknownType = 0;
+
+  for (const [index, row] of rows.entries()) {
+    if (!csvRowHasValues(row)) {
+      skippedEmpty++;
+      continue;
+    }
+    const requested = (row.page_type ?? '').trim();
+    const pageType = requested || (fallbackType === ALL_PAGE_TYPES ? '' : fallbackType);
+    if (!pageType || !validTypes.has(pageType)) {
+      skippedUnknownType++;
+      continue;
+    }
+    entries.push({ rowNumber: index + 2, row, pageType });
+  }
+
+  return { entries, skippedEmpty, skippedUnknownType };
+}
+
+/** Entries grouped by resolved page type, preserving row order within a group. */
+export function groupEntriesByType(entries: CsvRowEntry[]): Map<string, CsvRowEntry[]> {
+  const groups = new Map<string, CsvRowEntry[]>();
+  for (const entry of entries) {
+    const group = groups.get(entry.pageType) ?? [];
+    group.push(entry);
+    groups.set(entry.pageType, group);
+  }
+  return groups;
 }
 
 export function slugify(value: string): string {
@@ -465,8 +521,12 @@ export function importRowId(row: Record<string, string>): number | null {
   return /^-?\d+$/.test(id) ? parseInt(id, 10) : null;
 }
 
-/** Match each CSV row to an existing page by id (preferred) or slug — the host import's semantics. */
-export function matchImportTargets(rows: Array<Record<string, string>>, existing: CmsPage[]): Map<number, CmsPage> {
+/**
+ * Match each entry to an existing page by id (preferred) or slug — the host
+ * import's semantics. Returns matches keyed by CSV row number; pass entries
+ * and pages of ONE page type so a slug can't match across types.
+ */
+export function matchImportTargets(entries: CsvRowEntry[], existing: CmsPage[]): Map<number, CmsPage> {
   const byId = new Map<number, CmsPage>();
   const bySlug = new Map<string, CmsPage>();
   for (const page of existing) {
@@ -475,31 +535,33 @@ export function matchImportTargets(rows: Array<Record<string, string>>, existing
   }
 
   const targets = new Map<number, CmsPage>();
-  for (const [index, row] of rows.entries()) {
-    const id = importRowId(row);
-    const slug = row.slug?.trim() ?? '';
+  for (const entry of entries) {
+    const id = importRowId(entry.row);
+    const slug = entry.row.slug?.trim() ?? '';
     const match = (id !== null ? byId.get(id) : undefined) ?? (slug ? bySlug.get(slug) : undefined);
-    if (match) targets.set(index, match);
+    if (match) targets.set(entry.rowNumber, match);
   }
   return targets;
 }
 
+/** Preview rows for entries of one page type; `targets` is keyed by row number. */
 export function previewImportRows(
   meta: ContentMeta,
-  pageType: string,
-  rows: Array<Record<string, string>>,
+  entries: CsvRowEntry[],
   targets: Map<number, CmsPage>,
-): { rows: CsvImportPreviewRow[]; skipped: number } {
-  const pathSpecs = csvPathSpecs(meta, [pageType], true);
-  const preview: { rows: CsvImportPreviewRow[]; skipped: number } = { rows: [], skipped: 0 };
+): CsvImportPreviewRow[] {
+  const preview: CsvImportPreviewRow[] = [];
+  const specsByType = new Map<string, CsvPathSpec[]>();
 
-  for (const [index, row] of rows.entries()) {
-    if (!csvRowHasValues(row)) {
-      preview.skipped++;
-      continue;
+  for (const entry of entries) {
+    const { row, pageType } = entry;
+    let pathSpecs = specsByType.get(pageType);
+    if (!pathSpecs) {
+      pathSpecs = csvPathSpecs(meta, [pageType], true);
+      specsByType.set(pageType, pathSpecs);
     }
 
-    const existing = targets.get(index) ?? null;
+    const existing = targets.get(entry.rowNumber) ?? null;
     const lect: Lect = existing && isPlainRecord(existing.lect) ? structuredClone(existing.lect) as Lect : {};
     for (const spec of pathSpecs) {
       if (!(spec.header in row)) continue;
@@ -512,8 +574,9 @@ export function previewImportRows(
       || `Untitled ${pageType}`;
     const slug = row.slug?.trim() || existing?.slug || slugify(name);
 
-    preview.rows.push({
-      rowNumber: index + 2,
+    preview.push({
+      rowNumber: entry.rowNumber,
+      pageType,
       action: existing ? 'update' : 'create',
       name,
       slug,
