@@ -1,0 +1,6 @@
+# Base URL of the CMS Worker (Plugin API write-back).
+CMS_URL=http://localhost:8787
+# Must match the secret configured for this plugin in the CMS admin
+# (Plugins → import-export → Edit → Shared secret). In local dev it must match
+# the host CMS's .dev.vars PLUGIN_SECRET.
+PLUGIN_SECRET=dev-secret

@@ -1,0 +1,38 @@
+<div class="min-w-0 max-w-3xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+  <div class="mb-4">
+    <h1 class="text-2xl font-bold text-gray-900">Importing {{ pageType | escape }}…</h1>
+    <p class="mt-1 text-sm text-gray-500">{{ offset }} of {{ totalRows }} rows processed.</p>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div class="flex flex-wrap gap-2 mb-4">
+      <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">{{ created }} created</span>
+      <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700">{{ updated }} updated</span>
+      <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600">{{ skipped }} skipped</span>
+    </div>
+
+    <p class="text-sm text-gray-600 mb-4">
+      This import is large, so it runs in stages to stay within request limits.
+      Press “Continue import” to apply the next batch of rows.
+    </p>
+
+    <form method="POST" action="{{ action | escape }}">
+      <textarea name="csv" class="hidden">{{ csvText | escape }}</textarea>
+      <input type="hidden" name="action" value="{{ mode | escape }}">
+      <input type="hidden" name="offset" value="{{ offset }}">
+      <input type="hidden" name="created" value="{{ created }}">
+      <input type="hidden" name="updated" value="{{ updated }}">
+      <input type="hidden" name="skipped" value="{{ skipped }}">
+      <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <button type="submit"
+                class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 cursor-pointer">
+          Continue import
+        </button>
+        <a href="/admin/pages/list/{{ pageType | escape }}"
+           class="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+          Stop for now
+        </a>
+      </div>
+    </form>
+  </div>
+</div>

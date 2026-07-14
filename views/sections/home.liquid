@@ -1,0 +1,44 @@
+<div class="min-w-0 max-w-4xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+  <div class="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+    <h2 class="text-2xl font-bold text-gray-900">Import / Export</h2>
+    <a href="{{ exportAllHref | escape }}"
+       class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+      Export all page types
+    </a>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+    <table class="w-full min-w-[400px] text-left">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Page Type</th>
+          <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for entry in pageTypes %}
+          <tr>
+            <td class="px-4 py-3 text-sm font-medium text-gray-900">
+              <a href="{{ entry.listHref | escape }}" class="hover:underline">{{ entry.pageType | escape }}</a>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <div class="inline-flex items-center gap-2">
+                <a href="{{ entry.importHref | escape }}"
+                   class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">Import</a>
+                <a href="{{ entry.exportHref | escape }}"
+                   class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">Export CSV</a>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="mt-4 text-sm text-gray-500">
+    Exports include every draft page of the type, one CSV column per blueprint field
+    (localized fields expand per language) plus one <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">tag:taxonomy</code>
+    column per taxonomy. Imports match rows to existing pages by <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">id</code>
+    or <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">slug</code> and preview every change before applying.
+  </p>
+</div>
