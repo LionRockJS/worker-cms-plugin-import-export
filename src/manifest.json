@@ -3,7 +3,7 @@
   "name": "Import / Export",
   "version": "0.1.0",
   "nav": [
-    { "label": "Import / Export", "href": "", "roles": ["admin", "editor"] }
+    { "label": "Import / Export", "href": "", "roles": ["admin", "editor"], "group": "settings" }
   ],
   "permissions": [
     { "value": "content:import", "label": "Import/Export: use CSV import and export" }

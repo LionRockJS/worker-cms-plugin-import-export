@@ -33,9 +33,9 @@ Plugin API at `{CMS_URL}/__cms/*`.
 3. **Approve the wildcard page-type access**: Plugins → import-export → Page types →
    approve `*` for read and write. Without this every call returns
    `forbidden_page_type`.
-4. The sidebar gains an "Import / Export" entry. The host's per-list Import/Export
-   buttons and the advanced-search "Export CSV" button link here automatically when the
-   plugin is registered.
+4. The sidebar gains an "Import / Export" entry under Settings. The host's per-list
+   Import/Export buttons and the advanced-search "Export CSV" button link here
+   automatically when the plugin is registered.
 
 Access: admins always; other roles need the `content:import` permission (declared in
 the manifest, granted per role in the CMS admin).

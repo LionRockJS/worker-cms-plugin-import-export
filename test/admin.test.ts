@@ -33,7 +33,10 @@ describe('plugin worker routes', () => {
   it('serves the manifest', async () => {
     const response = await worker.fetch(new Request('https://plugin.local/__plugin/manifest'), env());
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ id: 'import-export' });
+    expect(await response.json()).toMatchObject({
+      id: 'import-export',
+      nav: [{ label: 'Import / Export', href: '', group: 'settings' }],
+    });
   });
 
   it('serves client-view templates under /__plugin/admin/views/* (the host view proxy path)', async () => {
