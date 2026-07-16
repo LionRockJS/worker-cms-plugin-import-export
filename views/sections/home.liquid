@@ -2,11 +2,11 @@
   <div class="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
     <h2 class="text-2xl font-bold text-gray-900">Import / Export</h2>
     <div class="flex flex-col gap-2 sm:flex-row">
-      <a href="{{ importAllHref | escape }}"
+      <a href="{{ importAllHref }}"
          class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
         Import all page types
       </a>
-      <a href="{{ exportAllHref | escape }}"
+      <a href="{{ exportAllHref }}"
          class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
         Export all page types
       </a>
@@ -25,13 +25,13 @@
         {% for entry in pageTypes %}
           <tr>
             <td class="px-4 py-3 text-sm font-medium text-gray-900">
-              <a href="{{ entry.listHref | escape }}" class="hover:underline">{{ entry.pageType | escape }}</a>
+              <a href="{{ entry.listHref }}" class="hover:underline">{{ entry.pageType }}</a>
             </td>
             <td class="px-4 py-3 text-right">
               <div class="inline-flex items-center gap-2">
-                <a href="{{ entry.importHref | escape }}"
+                <a href="{{ entry.importHref }}"
                    class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">Import</a>
-                <a href="{{ entry.exportHref | escape }}"
+                <a href="{{ entry.exportHref }}"
                    class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">Export CSV</a>
               </div>
             </td>

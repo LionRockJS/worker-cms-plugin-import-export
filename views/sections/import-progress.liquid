@@ -1,6 +1,6 @@
 <div class="min-w-0 max-w-3xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
   <div class="mb-4">
-    <h1 class="text-2xl font-bold text-gray-900">Importing {{ pageType | escape }}…</h1>
+    <h1 class="text-2xl font-bold text-gray-900">Importing {{ pageType }}…</h1>
     <p class="mt-1 text-sm text-gray-500">{{ offset }} of {{ totalRows }} rows processed.</p>
   </div>
 
@@ -16,9 +16,9 @@
       Press “Continue import” to apply the next batch of rows.
     </p>
 
-    <form method="POST" action="{{ action | escape }}">
-      <textarea name="csv" class="hidden">{{ csvText | escape }}</textarea>
-      <input type="hidden" name="action" value="{{ mode | escape }}">
+    <form method="POST" action="{{ action }}">
+      <textarea name="csv" class="hidden">{{ csvText }}</textarea>
+      <input type="hidden" name="action" value="{{ mode }}">
       <input type="hidden" name="offset" value="{{ offset }}">
       <input type="hidden" name="created" value="{{ created }}">
       <input type="hidden" name="updated" value="{{ updated }}">
@@ -28,7 +28,7 @@
                 class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 cursor-pointer">
           Continue import
         </button>
-        <a href="{{ backHref | escape }}"
+        <a href="{{ backHref }}"
            class="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
           Stop for now
         </a>
