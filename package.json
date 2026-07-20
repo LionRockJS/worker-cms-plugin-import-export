@@ -14,7 +14,7 @@
     "tenant:add": "node scripts/add-tenant.mjs"
   },
   "dependencies": {
-    "@lionrockjs/worker-cms-plugin": "0.3.0"
+    "@lionrockjs/worker-cms-plugin": "0.3.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260719.1",
