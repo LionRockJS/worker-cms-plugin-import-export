@@ -28,9 +28,9 @@ binding = "CF_VERSION_METADATA"
 #   npm run kv:setup:preview            # optional: preview ns for `wrangler dev`
 #   npm run tenant:add -- https://cms1.example.com   # registers a tenant record
 #
-# [[kv_namespaces]]
-# binding = "TENANTS"
-# id = "REPLACE_WITH_ID_FROM_npm_run_kv_setup"
+[[kv_namespaces]]
+binding = "TENANTS"
+id = "169217369b4d4139803c4b009fffc797"
 # preview_id = "REPLACE_WITH_ID_FROM_npm_run_kv_setup_preview"
 
 # The CMS forwards this secret on every admin call, and this plugin sends it
