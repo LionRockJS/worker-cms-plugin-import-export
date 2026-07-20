@@ -11,11 +11,11 @@
 // plugin can export and import every page type on the site.
 // ============================================================
 
-import { requirePluginSecret, serveViewAsset } from '@lionrockjs/worker-cms-plugin';
+import { requireTenant, serveViewAsset, tenantClientEnv, type TenantRegistryEnv } from '@lionrockjs/worker-cms-plugin';
 import { handleAdmin, type AdminEnv } from './admin';
 import MANIFEST from './manifest.json';
 
-interface PluginEnv extends AdminEnv {
+interface PluginEnv extends AdminEnv, TenantRegistryEnv {
   CF_VERSION_METADATA?: WorkerVersionMetadata;
 }
 
@@ -38,9 +38,15 @@ export default {
     }
 
     if (path.startsWith('/__plugin/admin')) {
-      const forbidden = requirePluginSecret(request, env.PLUGIN_SECRET);
-      if (forbidden) return forbidden;
-      return handleAdmin(request, env, url);
+      // Authenticate against the tenant registry: the host's `x-cms-tenant`
+      // header selects the KV record and `x-plugin-secret` must match THAT
+      // record's secret. Single-tenant installs (CMS_URL + PLUGIN_SECRET env,
+      // no KV) resolve to one synthesized tenant, so this stays backward
+      // compatible. tenantClientEnv overlays the tenant's CMS_URL/PLUGIN_SECRET
+      // so handleAdmin's CmsClient binds to the right CMS.
+      const tenant = await requireTenant(request, env);
+      if (tenant instanceof Response) return tenant;
+      return handleAdmin(request, tenantClientEnv(env, tenant), url);
     }
 
     return new Response('not found', { status: 404 });

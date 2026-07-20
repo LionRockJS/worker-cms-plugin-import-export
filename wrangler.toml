@@ -14,6 +14,25 @@ run_worker_first = true
 [version_metadata]
 binding = "CF_VERSION_METADATA"
 
+# Multi-tenant registry — lets one deployed plugin Worker serve several CMS
+# hosts. Each connected CMS is a `tenant:<canonical-origin>` KV record holding
+# that host's own { secret, cmsUrl }. The host sends its canonical origin in
+# the `x-cms-tenant` header and the plugin verifies `x-plugin-secret` against
+# THAT tenant's record (@lionrockjs/worker-cms-plugin → requireTenant).
+#
+# Single-tenant installs leave this commented and just set CMS_URL +
+# PLUGIN_SECRET — the lib synthesizes one tenant, no KV needed. To go
+# multi-tenant, create the namespace, uncomment the block, paste the id, then
+# register each host:
+#   npm run kv:setup                    # creates it, prints the id to paste below
+#   npm run kv:setup:preview            # optional: a preview ns for `wrangler dev`
+#   npm run tenant:add -- https://cms1.example.com   # registers a tenant record
+#
+# [[kv_namespaces]]
+# binding = "TENANTS"
+# id = "REPLACE_WITH_ID_FROM_npm_run_kv_setup"
+# preview_id = "REPLACE_WITH_ID_FROM_npm_run_kv_setup_preview"
+
 # The CMS forwards this secret on every admin call, and this plugin sends it
 # back on every Plugin API call. Set it to THIS plugin's dedicated secret —
 # shown in the CMS admin under Plugins → (this plugin) → Edit → Shared secret:
