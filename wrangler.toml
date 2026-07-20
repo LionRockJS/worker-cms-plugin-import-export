@@ -22,10 +22,10 @@ binding = "CF_VERSION_METADATA"
 #
 # Single-tenant installs leave this commented and just set CMS_URL +
 # PLUGIN_SECRET — the lib synthesizes one tenant, no KV needed. To go
-# multi-tenant, create the namespace, uncomment the block, paste the id, then
-# register each host:
-#   npm run kv:setup                    # creates it, prints the id to paste below
-#   npm run kv:setup:preview            # optional: a preview ns for `wrangler dev`
+# multi-tenant, run kv:setup — it creates the namespace, uncomments this block,
+# and writes the id in for you — then register each host:
+#   npm run kv:setup                    # create ns + fill in `id` below
+#   npm run kv:setup:preview            # optional: preview ns for `wrangler dev`
 #   npm run tenant:add -- https://cms1.example.com   # registers a tenant record
 #
 # [[kv_namespaces]]

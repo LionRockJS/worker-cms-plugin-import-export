@@ -8,13 +8,13 @@
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "kv:setup": "wrangler kv namespace create TENANTS",
-    "kv:setup:preview": "wrangler kv namespace create TENANTS --preview",
+    "kv:setup": "cms-plugin-kv-setup",
+    "kv:setup:preview": "cms-plugin-kv-setup --preview",
     "kv:list": "wrangler kv key list --binding TENANTS --remote --prefix tenant:",
     "tenant:add": "node scripts/add-tenant.mjs"
   },
   "dependencies": {
-    "@lionrockjs/worker-cms-plugin": "0.2.0"
+    "@lionrockjs/worker-cms-plugin": "0.3.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260719.1",

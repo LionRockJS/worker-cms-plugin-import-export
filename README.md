@@ -53,7 +53,7 @@ that host's own `{ secret, cmsUrl }`. The host sends its canonical origin in the
 record, so each CMS is isolated to its own pairwise secret and URL.
 
 ```sh
-npm run kv:setup                # create the TENANTS namespace → uncomment the [[kv_namespaces]] block in wrangler.toml and paste its id
+npm run kv:setup                # create the TENANTS namespace + write its id into wrangler.toml
 npm run kv:setup:preview        # (optional) preview namespace for `wrangler dev`
 npm run tenant:add -- https://cms1.example.com   # register a tenant (prints its secret)
 npm run tenant:add -- https://cms2.example.com --url https://api.cms2.example.com
