@@ -7,7 +7,11 @@
     "dev": "wrangler dev --port 8786",
     "deploy": "wrangler deploy",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "kv:setup": "wrangler kv namespace create TENANTS",
+    "kv:setup:preview": "wrangler kv namespace create TENANTS --preview",
+    "kv:list": "wrangler kv key list --binding TENANTS --remote --prefix tenant:",
+    "tenant:add": "node scripts/add-tenant.mjs"
   },
   "dependencies": {
     "@lionrockjs/worker-cms-plugin": "0.2.0"

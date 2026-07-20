@@ -44,6 +44,32 @@ Local dev: copy `.dev.vars.example` to `.dev.vars`; `PLUGIN_SECRET` must match t
 CMS's `.dev.vars` value, and the host needs the service binding + `PLUGINS` entry (see
 the host README).
 
+### Multi-tenant (one Worker, several CMS hosts)
+
+One deployed plugin Worker can serve many CMS installs. Each connected CMS is a
+*tenant* — a `tenant:<canonical-origin>` record in the `TENANTS` KV namespace holding
+that host's own `{ secret, cmsUrl }`. The host sends its canonical origin in the
+`x-cms-tenant` header; the plugin verifies `x-plugin-secret` against **that** tenant's
+record, so each CMS is isolated to its own pairwise secret and URL.
+
+```sh
+npm run kv:setup                # create the TENANTS namespace → uncomment the [[kv_namespaces]] block in wrangler.toml and paste its id
+npm run kv:setup:preview        # (optional) preview namespace for `wrangler dev`
+npm run tenant:add -- https://cms1.example.com   # register a tenant (prints its secret)
+npm run tenant:add -- https://cms2.example.com --url https://api.cms2.example.com
+npm run kv:list                 # list registered tenants
+npm run deploy
+```
+
+`tenant:add` generates a random shared secret and prints it once — set the same value on
+that host under Plugins → import-export → Edit → Shared secret. Pass `--secret <value>`
+to supply your own, `--local` to write to the `wrangler dev` KV, `--preview` for the
+preview namespace, `--dry-run` to preview without writing.
+
+Single-tenant installs skip all of this: set `CMS_URL` + `PLUGIN_SECRET` (env / `wrangler
+secret` / `.dev.vars`) and the plugin synthesizes one tenant with no KV needed — the
+`TENANTS` binding can be left unconfigured.
+
 ## Notes
 
 - The legacy JSON import (`/admin/pages/import/:type` textarea) was **not** ported —
