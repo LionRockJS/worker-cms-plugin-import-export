@@ -1,7 +1,7 @@
 name = "worker-cms-plugin-import-export"
 main = "src/index.ts"
-compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2026-07-14"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 # Admin view templates (JSON templates + Liquid sections, rendered by the CMS's
 # client-view resolver). The Worker runs first for every request and reads these
