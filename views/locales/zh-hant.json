@@ -1,0 +1,158 @@
+{
+  "plugins": {
+    "import-export": {
+      "nav": {
+        "index": "匯入 / 匯出"
+      }
+    }
+  },
+  "import-export": {
+    "import_modes": {
+      "new_append": {
+        "label": "新增 + 加入缺少的欄位",
+        "description": "建立新頁面，並為現有頁面填入空白欄位或加入標籤。"
+      },
+      "new": {
+        "label": "僅新增頁面",
+        "description": "只建立不符合現有草稿頁面的資料列。"
+      },
+      "new_overwrite": {
+        "label": "新增 + 取代現有欄位",
+        "description": "建立新頁面，並取代現有頁面中的相符欄位。"
+      },
+      "append": {
+        "label": "現有頁面：加入缺少的欄位",
+        "description": "只為現有頁面填入空白欄位或加入標籤。"
+      },
+      "overwrite": {
+        "label": "現有頁面：取代欄位",
+        "description": "只取代現有頁面中的相符欄位。"
+      },
+      "force_new": {
+        "label": "將所有資料列視為新頁面",
+        "description": "將每一列 CSV 都建立為新的草稿頁面，即使它符合現有頁面。"
+      }
+    },
+    "views": {
+      "common": {
+        "back": "返回",
+        "cancel": "取消",
+        "export_csv": "匯出 CSV",
+        "import": "匯入",
+        "of": "共",
+        "stop_for_now": "暫時停止"
+      },
+      "error": {
+        "default_heading": "無法連線至 CMS",
+        "not_configured": "尚未設定",
+        "not_configured_message": "此外掛 Worker 尚未設定 CMS_URL / PLUGIN_SECRET。",
+        "cms_request_failed": "CMS 要求失敗",
+        "set_cms_url_and_plugin_secret": "請在此外掛 Worker 上設定 CMS_URL 和 PLUGIN_SECRET",
+        "secret_must_match": "密碼必須與 CMS 管理介面顯示的值相同，然後重新載入"
+      },
+      "home": {
+        "title": "匯入 / 匯出",
+        "export_type_setup": "匯出類型設定",
+        "import_type_setup": "匯入類型設定",
+        "import_all_page_types": "匯入所有頁面類型",
+        "export_all_page_types": "匯出所有頁面類型",
+        "page_type": "頁面類型",
+        "actions": "操作",
+        "exports_include_every_draft": "匯出會包含此類型的所有草稿頁面。",
+        "one_column_per_blueprint_field": "每個藍圖欄位對應一個 CSV 欄",
+        "localized_fields_expand": "本地化欄位按語言展開",
+        "plus_taxonomy_columns": "並為每個分類增加一個",
+        "columns_per_taxonomy": "欄",
+        "plus_metadata_columns": "以及中繼資料欄",
+        "and": "和",
+        "imports_match_by": "匯入會依據以下欄位將資料列配對至現有頁面：",
+        "or": "或",
+        "preview_before_applying": "並在套用前預覽每項變更。",
+        "use_export_type_setup": "使用「匯出類型設定」下載頁面和區塊類型清單，再將 CSV 移到其他環境。"
+      },
+      "import_progress": {
+        "importing": "正在匯入",
+        "rows_processed": "列已處理",
+        "created": "已建立",
+        "updated": "已更新",
+        "skipped": "已略過",
+        "large_import": "這次匯入檔案較大，因此會分階段執行，以符合要求限制。",
+        "press_continue": "按「繼續匯入」套用下一批資料列。",
+        "continue_import": "繼續匯入"
+      },
+      "import": {
+        "confirm_import": "確認匯入",
+        "new_pages": "新頁面",
+        "existing_pages": "現有頁面",
+        "rows": "列",
+        "row": "列",
+        "skipped": "已略過",
+        "missing_or_unknown_page_type": "的 page_type 缺少或未知",
+        "import_action": "匯入操作",
+        "destructive": "具破壞性",
+        "csv_row": "CSV 列",
+        "type": "類型",
+        "page": "頁面",
+        "slug": "Slug",
+        "no_new_pages": "沒有新頁面。",
+        "imported_page": "匯入頁面",
+        "existing_draft": "現有草稿",
+        "no_existing_pages": "沒有現有頁面會被更新。",
+        "csv_header": "CSV 標題列",
+        "exported_csv_metadata": "匯出的 CSV 包含 page_type 和 block_type 中繼資料，可在移動資料時識別頁面和結構化區塊類型。",
+        "all_types_row_type": "每列的 page_type 欄位決定其類型",
+        "add_blueprint_columns": "按需要加入該類型的藍圖欄位",
+        "missing_unknown_rows_skipped": "page_type 缺少或未知的資料列會被略過。",
+        "single_type_override": "每列的 page_type 欄位會覆寫此頁面的類型。",
+        "csv_file": "CSV 檔案",
+        "or_paste_csv": "或貼上 CSV",
+        "review_import": "檢視匯入"
+      },
+      "type_import": {
+        "title": "匯入類型設定",
+        "description": "從匯出的 JSON 類型設定檔案重建頁面和結構化區塊類型。",
+        "page_types": "頁面類型",
+        "block_types": "區塊類型",
+        "page_type": "頁面類型",
+        "block_type": "區塊類型",
+        "missing": "個缺少",
+        "missing_or_to_check": "個缺少或待檢查",
+        "safety": "安全性",
+        "existing_not_overwritten": "不會覆寫現有定義。",
+        "blocks_before_pages": "會先建立區塊類型，再建立頁面類型。",
+        "review_before_applying": "套用前請檢視",
+        "create_missing_types": "建立缺少的類型",
+        "bulk_action_description": "批次操作會使用 CMS 已驗證的類型管理端點，並保留現有類型不變。",
+        "apply_missing_types": "套用缺少的類型",
+        "open_page_types": "開啟 CMS 頁面類型",
+        "open_block_types": "開啟 CMS 區塊類型",
+        "name": "名稱",
+        "slug": "Slug",
+        "blocks": "區塊",
+        "status": "狀態",
+        "existing_unchanged": "現有 — 不變",
+        "missing_will_create": "缺少 — 將建立",
+        "no_page_types": "檔案中找不到頁面類型。",
+        "no_block_types": "檔案中找不到區塊類型。",
+        "individual_fallback_forms": "個別備用表單",
+        "fallback_description": "如果此外掛尚未獲准使用批次匯入指令碼，可使用這些表單。每個表單會建立一個缺少的資料庫定義類型，然後返回 CMS 類型清單。",
+        "create_block_type": "建立區塊類型",
+        "create_page_type": "建立頁面類型",
+        "upload_description": "上傳從「匯出類型設定」下載的 JSON。會先建立缺少的資料庫定義區塊類型，再建立缺少的頁面類型。現有設定、外掛和資料庫定義都不會被覆寫。",
+        "type_setup_json": "類型設定 JSON",
+        "or_paste_json": "或貼上 JSON",
+        "review_type_setup": "檢視類型設定",
+        "reading_destination": "正在讀取目標類型清單…",
+        "preview_payload_error": "無法讀取預覽內容。請重新上傳類型設定檔案。",
+        "creating": "正在建立…",
+        "created": "已建立",
+        "read_error": "無法讀取{kind}清單（{status}）。",
+        "create_error": "CMS 拒絕建立{kind}「{slug}」（{status}）。",
+        "not_created_error": "CMS 沒有建立{kind}「{slug}」。請檢查類型管理權限和藍圖。",
+        "missing_blocks_error": "無法建立頁面類型「{slug}」：缺少區塊類型 {blocks}。",
+        "applied": "類型設定已套用。現有定義保持不變；現在可以匯入 CSV 頁面。",
+        "apply_error": "無法套用類型設定。"
+      }
+    }
+  }
+}

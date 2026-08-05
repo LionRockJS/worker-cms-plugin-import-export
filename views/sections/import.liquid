@@ -1,31 +1,31 @@
 <div class="min-w-0 max-w-4xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
   <div class="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
     <h2 class="text-2xl font-bold text-gray-900">
-      {% if isConfirmImport %}Confirm Import{% else %}Import{% endif %}
+      {% if isConfirmImport %}{{ "import-export.views.import.confirm_import" | t }}{% else %}{{ "import-export.views.common.import" | t }}{% endif %}
       {{ pageType }}
     </h2>
-    <a href="{{ backHref }}" class="text-sm text-indigo-600 hover:underline">Back</a>
+    <a href="{{ backHref }}" class="text-sm text-indigo-600 hover:underline">{{ "import-export.views.common.back" | t }}</a>
   </div>
 
   {% if isConfirmImport %}
     <div class="mb-4 grid gap-3 sm:grid-cols-3">
       <div class="rounded-lg border border-gray-200 bg-white px-4 py-3">
-        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">New Pages</div>
+        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.new_pages" | t }}</div>
         <div class="mt-1 text-2xl font-semibold text-gray-900">{{ newCount }}</div>
       </div>
       <div class="rounded-lg border border-gray-200 bg-white px-4 py-3">
-        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">Existing Pages</div>
+        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.existing_pages" | t }}</div>
         <div class="mt-1 text-2xl font-semibold text-gray-900">{{ existingCount }}</div>
       </div>
       <div class="rounded-lg border border-gray-200 bg-white px-4 py-3">
-        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">Rows</div>
+        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.rows" | t }}</div>
         <div class="mt-1 text-2xl font-semibold text-gray-900">{{ previewCount }}</div>
       </div>
     </div>
 
     {% if skippedCount > 0 %}
       <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        {{ skippedCount }} row{% if skippedCount != 1 %}s{% endif %} skipped{% if skippedUnknownType > 0 %} ({{ skippedUnknownType }} with a missing or unknown page_type){% endif %}.
+        {{ skippedCount }} {% if skippedCount != 1 %}{{ "import-export.views.import.rows" | t }}{% else %}{{ "import-export.views.import.row" | t }}{% endif %} {{ "import-export.views.import.skipped" | t }}{% if skippedUnknownType > 0 %} ({{ skippedUnknownType }} {{ "import-export.views.import.missing_or_unknown_page_type" | t }}){% endif %}.
       </div>
     {% endif %}
 
@@ -34,7 +34,7 @@
 
       {% if hasImportModeOptions %}
         <fieldset class="mb-6 min-w-0">
-          <legend class="mb-2 text-sm font-semibold uppercase tracking-wider text-gray-500">Import Action</legend>
+          <legend class="mb-2 text-sm font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.import_action" | t }}</legend>
           <div class="grid gap-2 lg:grid-cols-2">
             {% for option in importModeOptions %}
               <label class="flex min-w-0 cursor-pointer gap-3 rounded-lg border border-gray-200 bg-white p-3 hover:bg-gray-50">
@@ -43,12 +43,12 @@
                        class="mt-1 h-4 w-4 shrink-0 border-gray-300 text-indigo-600 focus:ring-indigo-500">
                 <span class="min-w-0">
                   <span class="flex flex-wrap items-center gap-2 text-sm font-semibold text-gray-900">
-                    {{ option.label }}
+                    {{ option.labelKey | t }}
                     {% if option.destructive %}
-                      <span class="rounded bg-red-50 px-1.5 py-0.5 text-xs font-semibold text-red-700">Destructive</span>
+                      <span class="rounded bg-red-50 px-1.5 py-0.5 text-xs font-semibold text-red-700">{{ "import-export.views.import.destructive" | t }}</span>
                     {% endif %}
                   </span>
-                  <span class="mt-1 block text-sm text-gray-500">{{ option.description }}</span>
+                  <span class="mt-1 block text-sm text-gray-500">{{ option.descriptionKey | t }}</span>
                 </span>
               </label>
             {% endfor %}
@@ -59,7 +59,7 @@
       <div class="space-y-6">
         <section class="min-w-0">
           <div class="mb-2 flex items-center justify-between">
-            <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500">New Pages</h3>
+            <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.new_pages" | t }}</h3>
             <span class="text-sm text-gray-500">{{ newCount }}</span>
           </div>
           {% if hasNewRows %}
@@ -67,10 +67,10 @@
               <table class="w-full min-w-[560px] text-left">
                 <thead class="bg-gray-50">
                   <tr>
-                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">CSV Row</th>
-                    {% if showTypeColumn %}<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Type</th>{% endif %}
-                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Page</th>
-                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Slug</th>
+                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.csv_row" | t }}</th>
+                    {% if showTypeColumn %}<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.type" | t }}</th>{% endif %}
+                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.page" | t }}</th>
+                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.slug" | t }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -86,13 +86,13 @@
               </table>
             </div>
           {% else %}
-            <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">No new pages.</div>
+            <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">{{ "import-export.views.import.no_new_pages" | t }}</div>
           {% endif %}
         </section>
 
         <section class="min-w-0">
           <div class="mb-2 flex items-center justify-between">
-            <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500">Existing Pages</h3>
+            <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.existing_pages" | t }}</h3>
             <span class="text-sm text-gray-500">{{ existingCount }}</span>
           </div>
           {% if hasExistingRows %}
@@ -100,10 +100,10 @@
               <table class="w-full min-w-[560px] text-left">
                 <thead class="bg-gray-50">
                   <tr>
-                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">CSV Row</th>
-                    {% if showTypeColumn %}<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Type</th>{% endif %}
-                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Imported Page</th>
-                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Existing Draft</th>
+                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.csv_row" | t }}</th>
+                    {% if showTypeColumn %}<th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.type" | t }}</th>{% endif %}
+                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.imported_page" | t }}</th>
+                    <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.existing_draft" | t }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -125,7 +125,7 @@
               </table>
             </div>
           {% else %}
-            <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">No existing pages will be updated.</div>
+            <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">{{ "import-export.views.import.no_existing_pages" | t }}</div>
           {% endif %}
         </section>
       </div>
@@ -133,51 +133,54 @@
       <div class="mt-6 flex flex-col gap-2 sm:flex-row justify-end">
         <a href="{{ backHref }}"
            class="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-          Cancel
+          {{ "import-export.views.common.cancel" | t }}
         </a>
         <button type="submit"
                 {% unless hasPreviewRows %}disabled{% endunless %}
-                title="Confirm Import"
-                aria-label="Confirm Import"
+                title="{{ "import-export.views.import.confirm_import" | t }}"
+                aria-label="{{ "import-export.views.import.confirm_import" | t }}"
                 class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 {% unless hasPreviewRows %}cursor-not-allowed opacity-75{% endunless %}">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/icons.svg#upload"></use></svg>
-          <span class="hidden lg:inline">Confirm Import</span>
+          <span class="hidden lg:inline">{{ "import-export.views.import.confirm_import" | t }}</span>
         </button>
       </div>
     </form>
   {% else %}
     <form method="POST" action="{{ action }}" enctype="multipart/form-data" class="min-w-0 max-w-3xl space-y-4">
       <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
-        <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">CSV Header</div>
+        <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.csv_header" | t }}</div>
         <code class="block whitespace-pre-wrap break-words text-xs text-gray-600">{{ sampleCsvHeader }}</code>
+        <p class="mt-2 text-xs text-gray-500">
+          {{ "import-export.views.import.exported_csv_metadata" | t }}
+        </p>
         {% if isAllTypes %}
           <p class="mt-2 text-xs text-gray-500">
-            Each row's <code class="bg-gray-100 px-1.5 py-0.5 rounded font-mono">page_type</code> column decides its type
-            (add that type's blueprint columns as needed — an "Export all page types" file works as-is).
-            Rows with a missing or unknown page_type are skipped.
+            {{ "import-export.views.import.all_types_row_type" | t }}
+            ({{ "import-export.views.import.add_blueprint_columns" | t }} — {{ "import-export.views.home.export_all_page_types" | t }}).
+            {{ "import-export.views.import.missing_unknown_rows_skipped" | t }}
           </p>
         {% else %}
           <p class="mt-2 text-xs text-gray-500">
-            A <code class="bg-gray-100 px-1.5 py-0.5 rounded font-mono">page_type</code> column overrides this page's type per row.
+            {{ "import-export.views.import.single_type_override" | t }}
           </p>
         {% endif %}
       </div>
       <label class="block">
-        <span class="mb-1 block text-sm font-medium text-gray-700">CSV File</span>
+        <span class="mb-1 block text-sm font-medium text-gray-700">{{ "import-export.views.import.csv_file" | t }}</span>
         <input type="file" name="file" accept=".csv,text/csv"
                class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700">
       </label>
       <label for="csv" class="block">
-        <span class="mb-1 block text-sm font-medium text-gray-700">Or Paste CSV</span>
+        <span class="mb-1 block text-sm font-medium text-gray-700">{{ "import-export.views.import.or_paste_csv" | t }}</span>
         <textarea id="csv" name="csv" rows="14"
                   class="block min-w-0 w-full max-w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"></textarea>
       </label>
       <button type="submit"
-              title="Review Import"
-              aria-label="Review Import"
+              title="{{ "import-export.views.import.review_import" | t }}"
+              aria-label="{{ "import-export.views.import.review_import" | t }}"
               class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/icons.svg#upload"></use></svg>
-        <span class="hidden lg:inline">Review Import</span>
+        <span class="hidden lg:inline">{{ "import-export.views.import.review_import" | t }}</span>
       </button>
     </form>
   {% endif %}

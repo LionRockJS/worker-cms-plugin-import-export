@@ -31,6 +31,12 @@ export default {
       });
     }
 
+    // Static assets are fetched by the CMS from the plugin's declared asset
+    // paths after an administrator approves them in Plugins → Assets.
+    if (path.startsWith('/assets/')) {
+      return serveViewAsset(env.VIEWS, path);
+    }
+
     // Plugin-owned view templates, served to the CMS's composite view resolver.
     if (path.startsWith('/__plugin/views/')) {
       const assetPath = path.slice('/__plugin/views'.length) || '/';

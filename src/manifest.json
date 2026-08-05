@@ -3,11 +3,15 @@
   "name": "Import / Export",
   "version": "0.1.0",
   "autoTenant": true,
+  "i18n": true,
   "nav": [
     { "label": "Import / Export", "href": "", "roles": ["admin", "editor"], "group": "settings" }
   ],
   "permissions": [
-    { "value": "content:import", "label": "Import/Export: use CSV import and export" }
+    { "value": "content:import", "label": "Import/Export: use CSV and type setup import/export" }
+  ],
+  "assets": [
+    { "path": "/assets/type-import.js", "label": "Type setup importer" }
   ],
   "contentTypes": {
     "readTypes": ["*"],

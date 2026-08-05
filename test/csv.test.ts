@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALL_PAGE_TYPES,
+  blockTypesForLect,
+  buildContentTypeSetupExport,
   buildExportCsv,
   csvFormatValue,
+  csvImportPathSpecs,
   csvImportMode,
   csvPathSpecs,
   csvRowsToObjects,
   groupEntriesByType,
   matchImportTargets,
+  parseContentTypeSetupImport,
   parseCsv,
   prepareCreateFromRow,
   prepareUpdateFromRow,
@@ -108,7 +112,12 @@ describe('export', () => {
   it('builds a CSV with blueprint, data-discovered and tag columns', () => {
     const pages = [
       page({
-        lect: { name: { en: 'One' }, status: 'live', extra: 'x' },
+        lect: {
+          name: { en: 'One' },
+          status: 'live',
+          extra: 'x',
+          _blocks: [{ _type: 'hero', title: { en: 'Hero' } }, { _type: 'text', body: 'Body' }],
+        },
         tags: [{ id: 9, name: 'News', taxonomy: 'Topic', taxonomy_slug: 'topic' }],
       }),
     ];
@@ -119,7 +128,70 @@ describe('export', () => {
     expect(headers).toContain('tag:Topic');
     expect(row[headers.indexOf('name.en')]).toBe('One');
     expect(row[headers.indexOf('status')]).toBe('live');
+    expect(row[headers.indexOf('page_type')]).toBe('default');
+    expect(row[headers.indexOf('block_type')]).toBe('hero; text');
     expect(row[headers.indexOf('tag:Topic')]).toBe('News');
+  });
+
+  it('lists unique structured block types and exports their observed fields for setup', () => {
+    const pages = [page({
+      lect: {
+        _blocks: [
+          { _type: 'hero', title: { en: 'Hero' } },
+          { _type: 'hero', title: { en: 'Hero 2' } },
+        ],
+      },
+    })];
+    expect(blockTypesForLect(pages[0].lect as Record<string, unknown>)).toEqual(['hero']);
+
+    const setup = buildContentTypeSetupExport({
+      ...meta,
+      page_type_definitions: {
+        default: { blueprint: ['name'], block_types: ['hero'], taxonomy_types: ['topic'] },
+      },
+      block_type_definitions: {
+        hero: { blueprint: ['title'] },
+      },
+    }, pages);
+    expect(setup.page_types[0]).toMatchObject({
+      page_type: 'default',
+      blueprint: ['name'],
+      block_types: ['hero'],
+      taxonomy_types: ['topic'],
+    });
+    expect(setup.block_types[0]).toMatchObject({ block_type: 'hero', blueprint: ['title'] });
+    expect(setup.block_types[0].path_specs).toContainEqual({ path: 'title', kind: 'localized' });
+  });
+
+  it('validates and normalizes an exported type setup for import', () => {
+    const setup = buildContentTypeSetupExport({
+      ...meta,
+      page_type_definitions: {
+        default: { blueprint: ['name'], block_types: ['hero'], taxonomy_types: ['topic'] },
+      },
+      block_type_definitions: {
+        hero: { blueprint: ['title'] },
+      },
+    }, [page({ lect: { name: { en: 'One' }, _blocks: [{ _type: 'hero', title: 'Hero' }] } })]);
+
+    const result = parseContentTypeSetupImport(JSON.stringify({ ...setup, exported_at: '2026-08-05T00:00:00.000Z' }));
+    expect(result.errors).toEqual([]);
+    expect(result.setup?.page_types[0]).toMatchObject({ page_type: 'default', block_types: ['hero'] });
+    expect(result.setup?.block_types[0]).toMatchObject({ block_type: 'hero', blueprint: ['title'] });
+  });
+
+  it('rejects malformed type setup files before any write can happen', () => {
+    const result = parseContentTypeSetupImport(JSON.stringify({
+      format: '0xCMS content-type-setup',
+      version: 1,
+      languages: ['en'],
+      default_language: 'en',
+      taxonomies: [],
+      page_types: [{ page_type: 'bad slug', name: 'Bad', blueprint: [], block_types: [], taxonomy_types: [] }],
+      block_types: [],
+    }));
+    expect(result.setup).toBeNull();
+    expect(result.errors.some((error) => error.includes('page_types[0].page_type'))).toBe(true);
   });
 });
 
@@ -190,6 +262,23 @@ describe('import apply', () => {
     expect(create.weight).toBe(3);
     expect(create.lect).toMatchObject({ name: { en: 'Fresh' }, status: 'draft' });
     expect(create.tags).toEqual([9, 10]);
+  });
+
+  it('round-trips explicit block types and data-only structured fields', () => {
+    const row = {
+      name: 'With blocks',
+      slug: 'with-blocks',
+      page_type: 'default',
+      block_type: 'hero; text',
+      '_blocks[*]._type': 'hero; text',
+      '_blocks[*].title.en': 'Hero; Text',
+    };
+    const pathSpecs = csvImportPathSpecs(meta, ['default'], Object.keys(row), true);
+    const create = prepareCreateFromRow(meta, 'default', row, pathSpecs, new Map());
+    expect(create.lect._blocks).toEqual([
+      { _type: 'hero', title: { en: 'Hero' } },
+      { _type: 'text', title: { en: 'Text' } },
+    ]);
   });
 
   it('append mode only fills blanks; replace mode overwrites', () => {

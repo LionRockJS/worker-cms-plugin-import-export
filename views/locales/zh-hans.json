@@ -1,0 +1,158 @@
+{
+  "plugins": {
+    "import-export": {
+      "nav": {
+        "index": "导入 / 导出"
+      }
+    }
+  },
+  "import-export": {
+    "import_modes": {
+      "new_append": {
+        "label": "新建 + 添加缺失字段",
+        "description": "创建新页面，并为现有页面填充空字段或添加标签。"
+      },
+      "new": {
+        "label": "仅新页面",
+        "description": "只创建不匹配现有草稿页面的行。"
+      },
+      "new_overwrite": {
+        "label": "新建 + 替换现有字段",
+        "description": "创建新页面，并替换现有页面中的匹配字段。"
+      },
+      "append": {
+        "label": "现有页面：添加缺失字段",
+        "description": "只为现有页面填充空字段或添加标签。"
+      },
+      "overwrite": {
+        "label": "现有页面：替换字段",
+        "description": "只替换现有页面中的匹配字段。"
+      },
+      "force_new": {
+        "label": "将所有行视为新页面",
+        "description": "将每一行 CSV 都创建为新的草稿页面，即使它与现有页面匹配。"
+      }
+    },
+    "views": {
+      "common": {
+        "back": "返回",
+        "cancel": "取消",
+        "export_csv": "导出 CSV",
+        "import": "导入",
+        "of": "共",
+        "stop_for_now": "暂时停止"
+      },
+      "error": {
+        "default_heading": "无法连接 CMS",
+        "not_configured": "尚未配置",
+        "not_configured_message": "此插件 Worker 尚未配置 CMS_URL / PLUGIN_SECRET。",
+        "cms_request_failed": "CMS 请求失败",
+        "set_cms_url_and_plugin_secret": "请在此插件 Worker 上设置 CMS_URL 和 PLUGIN_SECRET",
+        "secret_must_match": "密钥必须与 CMS 管理界面显示的值一致，然后重新载入"
+      },
+      "home": {
+        "title": "导入 / 导出",
+        "export_type_setup": "导出类型设置",
+        "import_type_setup": "导入类型设置",
+        "import_all_page_types": "导入所有页面类型",
+        "export_all_page_types": "导出所有页面类型",
+        "page_type": "页面类型",
+        "actions": "操作",
+        "exports_include_every_draft": "导出会包含该类型的所有草稿页面。",
+        "one_column_per_blueprint_field": "每个蓝图字段对应一个 CSV 栏位",
+        "localized_fields_expand": "本地化字段按语言展开",
+        "plus_taxonomy_columns": "并为每个分类增加一个",
+        "columns_per_taxonomy": "栏位",
+        "plus_metadata_columns": "以及元数据栏位",
+        "and": "和",
+        "imports_match_by": "导入会根据以下字段将行匹配到现有页面：",
+        "or": "或",
+        "preview_before_applying": "并在应用前预览每项变更。",
+        "use_export_type_setup": "使用“导出类型设置”下载页面和区块类型清单，再将 CSV 移到其他环境。"
+      },
+      "import_progress": {
+        "importing": "正在导入",
+        "rows_processed": "行已处理",
+        "created": "已创建",
+        "updated": "已更新",
+        "skipped": "已跳过",
+        "large_import": "此次导入文件较大，因此会分阶段执行，以符合请求限制。",
+        "press_continue": "按“继续导入”应用下一批行。",
+        "continue_import": "继续导入"
+      },
+      "import": {
+        "confirm_import": "确认导入",
+        "new_pages": "新页面",
+        "existing_pages": "现有页面",
+        "rows": "行",
+        "row": "行",
+        "skipped": "已跳过",
+        "missing_or_unknown_page_type": "的 page_type 缺失或未知",
+        "import_action": "导入操作",
+        "destructive": "具破坏性",
+        "csv_row": "CSV 行",
+        "type": "类型",
+        "page": "页面",
+        "slug": "Slug",
+        "no_new_pages": "没有新页面。",
+        "imported_page": "导入页面",
+        "existing_draft": "现有草稿",
+        "no_existing_pages": "没有现有页面会被更新。",
+        "csv_header": "CSV 标题列",
+        "exported_csv_metadata": "导出的 CSV 包含 page_type 和 block_type 元数据，可在搬移数据时识别页面和结构化区块类型。",
+        "all_types_row_type": "每行的 page_type 栏位决定其类型",
+        "add_blueprint_columns": "按需要加入该类型的蓝图栏位",
+        "missing_unknown_rows_skipped": "page_type 缺失或未知的行会被跳过。",
+        "single_type_override": "每行的 page_type 栏位会覆盖此页面的类型。",
+        "csv_file": "CSV 文件",
+        "or_paste_csv": "或贴上 CSV",
+        "review_import": "检视导入"
+      },
+      "type_import": {
+        "title": "导入类型设置",
+        "description": "从导出的 JSON 类型设置文件重建页面和结构化区块类型。",
+        "page_types": "页面类型",
+        "block_types": "区块类型",
+        "page_type": "页面类型",
+        "block_type": "区块类型",
+        "missing": "个缺失",
+        "missing_or_to_check": "个缺失或待检查",
+        "safety": "安全性",
+        "existing_not_overwritten": "不会覆盖现有定义。",
+        "blocks_before_pages": "会先创建区块类型，再创建页面类型。",
+        "review_before_applying": "应用前请检视",
+        "create_missing_types": "创建缺失类型",
+        "bulk_action_description": "批量操作会使用 CMS 已验证的类型管理端点，并保留现有类型不变。",
+        "apply_missing_types": "应用缺失类型",
+        "open_page_types": "打开 CMS 页面类型",
+        "open_block_types": "打开 CMS 区块类型",
+        "name": "名称",
+        "slug": "Slug",
+        "blocks": "区块",
+        "status": "状态",
+        "existing_unchanged": "现有 — 不变",
+        "missing_will_create": "缺失 — 将创建",
+        "no_page_types": "文件中没有找到页面类型。",
+        "no_block_types": "文件中没有找到区块类型。",
+        "individual_fallback_forms": "个别备用表单",
+        "fallback_description": "如果此插件尚未获批使用批量导入脚本，可使用这些表单。每个表单会创建一个缺失的数据库定义类型，然后返回 CMS 类型清单。",
+        "create_block_type": "创建区块类型",
+        "create_page_type": "创建页面类型",
+        "upload_description": "上传从“导出类型设置”下载的 JSON。会先创建缺失的数据库定义区块类型，再创建缺失的页面类型。现有配置、插件和数据库定义都不会被覆盖。",
+        "type_setup_json": "类型设置 JSON",
+        "or_paste_json": "或贴上 JSON",
+        "review_type_setup": "检视类型设置",
+        "reading_destination": "正在读取目标类型清单…",
+        "preview_payload_error": "无法读取预览内容。请重新上传类型设置文件。",
+        "creating": "正在创建…",
+        "created": "已创建",
+        "read_error": "无法读取{kind}清单（{status}）。",
+        "create_error": "CMS 拒绝创建{kind}“{slug}”（{status}）。",
+        "not_created_error": "CMS 没有创建{kind}“{slug}”。请检查类型管理权限和蓝图。",
+        "missing_blocks_error": "无法创建页面类型“{slug}”：缺少区块类型 {blocks}。",
+        "applied": "类型设置已应用。现有定义保持不变；现在可以导入 CSV 页面。",
+        "apply_error": "无法应用类型设置。"
+      }
+    }
+  }
+}

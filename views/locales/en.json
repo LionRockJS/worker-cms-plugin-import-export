@@ -1,0 +1,158 @@
+{
+  "plugins": {
+    "import-export": {
+      "nav": {
+        "index": "Import / Export"
+      }
+    }
+  },
+  "import-export": {
+    "import_modes": {
+      "new_append": {
+        "label": "New + Add Missing Fields",
+        "description": "Create new pages and fill empty fields or add tags on existing pages."
+      },
+      "new": {
+        "label": "New Pages Only",
+        "description": "Create only rows that do not match an existing draft page."
+      },
+      "new_overwrite": {
+        "label": "New + Replace Existing Fields",
+        "description": "Create new pages and replace matching fields on existing pages."
+      },
+      "append": {
+        "label": "Existing Pages: Add Missing Fields",
+        "description": "Only fill empty fields or add tags on existing pages."
+      },
+      "overwrite": {
+        "label": "Existing Pages: Replace Fields",
+        "description": "Only replace matching fields on existing pages."
+      },
+      "force_new": {
+        "label": "Treat All Rows As New Pages",
+        "description": "Create every CSV row as a new draft page, even when it matches an existing page."
+      }
+    },
+    "views": {
+      "common": {
+        "back": "Back",
+        "cancel": "Cancel",
+        "export_csv": "Export CSV",
+        "import": "Import",
+        "of": "of",
+        "stop_for_now": "Stop for now"
+      },
+      "error": {
+        "default_heading": "Cannot reach the CMS",
+        "not_configured": "Not configured",
+        "not_configured_message": "CMS_URL / PLUGIN_SECRET are not configured for this plugin Worker.",
+        "cms_request_failed": "CMS request failed",
+        "set_cms_url_and_plugin_secret": "Set CMS_URL and PLUGIN_SECRET on this plugin Worker",
+        "secret_must_match": "the secret must match the value shown in the CMS admin, then reload"
+      },
+      "home": {
+        "title": "Import / Export",
+        "export_type_setup": "Export type setup",
+        "import_type_setup": "Import type setup",
+        "import_all_page_types": "Import all page types",
+        "export_all_page_types": "Export all page types",
+        "page_type": "Page Type",
+        "actions": "Actions",
+        "exports_include_every_draft": "Exports include every draft page of the type.",
+        "one_column_per_blueprint_field": "There is one CSV column per blueprint field",
+        "localized_fields_expand": "localized fields expand per language",
+        "plus_taxonomy_columns": "plus one",
+        "columns_per_taxonomy": "column per taxonomy",
+        "plus_metadata_columns": "and metadata columns",
+        "and": "and",
+        "imports_match_by": "Imports match rows to existing pages by",
+        "or": "or",
+        "preview_before_applying": "and preview every change before applying.",
+        "use_export_type_setup": "Use Export type setup to download the page and block type inventory before moving the CSV to another environment."
+      },
+      "import_progress": {
+        "importing": "Importing",
+        "rows_processed": "rows processed",
+        "created": "created",
+        "updated": "updated",
+        "skipped": "skipped",
+        "large_import": "This import is large, so it runs in stages to stay within request limits.",
+        "press_continue": "Press “Continue import” to apply the next batch of rows.",
+        "continue_import": "Continue import"
+      },
+      "import": {
+        "confirm_import": "Confirm Import",
+        "new_pages": "New Pages",
+        "existing_pages": "Existing Pages",
+        "rows": "Rows",
+        "row": "row",
+        "skipped": "skipped",
+        "missing_or_unknown_page_type": "with a missing or unknown page_type",
+        "import_action": "Import Action",
+        "destructive": "Destructive",
+        "csv_row": "CSV Row",
+        "type": "Type",
+        "page": "Page",
+        "slug": "Slug",
+        "no_new_pages": "No new pages.",
+        "imported_page": "Imported Page",
+        "existing_draft": "Existing Draft",
+        "no_existing_pages": "No existing pages will be updated.",
+        "csv_header": "CSV Header",
+        "exported_csv_metadata": "Exported CSVs include page_type and block_type metadata so page and structured-block types can be identified when moving data.",
+        "all_types_row_type": "Each row’s page_type column decides its type",
+        "add_blueprint_columns": "add that type’s blueprint columns as needed",
+        "missing_unknown_rows_skipped": "Rows with a missing or unknown page_type are skipped.",
+        "single_type_override": "A page_type column overrides this page’s type per row.",
+        "csv_file": "CSV File",
+        "or_paste_csv": "Or Paste CSV",
+        "review_import": "Review Import"
+      },
+      "type_import": {
+        "title": "Import type setup",
+        "description": "Recreate page and structured block types from an exported JSON setup file.",
+        "page_types": "Page types",
+        "block_types": "Block types",
+        "page_type": "page type",
+        "block_type": "block type",
+        "missing": "missing",
+        "missing_or_to_check": "missing or to check",
+        "safety": "Safety",
+        "existing_not_overwritten": "Existing definitions are not overwritten.",
+        "blocks_before_pages": "Block types are created before page types.",
+        "review_before_applying": "Review before applying",
+        "create_missing_types": "Create missing types",
+        "bulk_action_description": "The bulk action uses the CMS’s authenticated type-admin endpoints and leaves existing types unchanged.",
+        "apply_missing_types": "Apply missing types",
+        "open_page_types": "Open CMS page types",
+        "open_block_types": "Open CMS block types",
+        "name": "Name",
+        "slug": "Slug",
+        "blocks": "Blocks",
+        "status": "Status",
+        "existing_unchanged": "Existing — unchanged",
+        "missing_will_create": "Missing — will create",
+        "no_page_types": "No page types were found in this file.",
+        "no_block_types": "No block types were found in this file.",
+        "individual_fallback_forms": "Individual fallback forms",
+        "fallback_description": "Use these if the bulk import script is not approved for this plugin. Each form creates one missing database-defined type and then returns to the CMS type list.",
+        "create_block_type": "Create block type",
+        "create_page_type": "Create page type",
+        "upload_description": "Upload the JSON downloaded from Export type setup. Missing database-defined block types are created first, then missing page types. Existing config, plugin, and database definitions are never overwritten.",
+        "type_setup_json": "Type setup JSON",
+        "or_paste_json": "Or paste JSON",
+        "review_type_setup": "Review type setup",
+        "reading_destination": "Reading the destination type lists…",
+        "preview_payload_error": "The preview payload could not be read. Upload the setup file again.",
+        "creating": "Creating…",
+        "created": "Created",
+        "read_error": "Could not read {kind} types ({status}).",
+        "create_error": "The CMS rejected {kind} “{slug}” ({status}).",
+        "not_created_error": "The CMS did not create {kind} “{slug}”. Check its type-admin permissions and blueprint.",
+        "missing_blocks_error": "Cannot create page type “{slug}”: missing block type(s) {blocks}.",
+        "applied": "Type setup applied. Existing definitions were left unchanged; you can now import the CSV pages.",
+        "apply_error": "The type setup could not be applied."
+      }
+    }
+  }
+}

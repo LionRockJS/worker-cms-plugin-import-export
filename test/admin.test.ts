@@ -35,6 +35,7 @@ describe('plugin worker routes', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       id: 'import-export',
+      i18n: true,
       nav: [{ label: 'Import / Export', href: '', group: 'settings' }],
     });
   });
@@ -48,12 +49,26 @@ describe('plugin worker routes', () => {
 
     const section = await worker.fetch(adminRequest('/__plugin/admin/views/sections/import.liquid'), env());
     expect(section.status).toBe(200);
-    expect(await section.text()).toContain('Confirm Import');
+    expect(await section.text()).toContain('import-export.views.import.confirm_import');
+
+    const typeSection = await worker.fetch(adminRequest('/__plugin/admin/views/sections/type-import.liquid'), env());
+    expect(typeSection.status).toBe(200);
+    expect(await typeSection.text()).toContain('import-export.views.type_import.apply_missing_types');
   });
 
   it('also serves views at the direct /__plugin/views/* contract path', async () => {
     const response = await worker.fetch(new Request('https://plugin.local/__plugin/views/templates/import.json'), env());
     expect(response.status).toBe(200);
+  });
+
+  it('serves the approved type-import asset', async () => {
+    const response = await worker.fetch(new Request('https://plugin.local/assets/type-import.js'), env());
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("/admin/block_types");
+
+    const proxied = await worker.fetch(adminRequest('/__plugin/admin/assets/type-import.js'), env());
+    expect(proxied.status).toBe(200);
+    expect(proxied.headers.get('content-type')).toContain('text/javascript');
   });
 
   it('rejects admin calls without the plugin secret', async () => {

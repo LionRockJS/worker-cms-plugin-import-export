@@ -1,15 +1,25 @@
 # worker-cms-plugin-import-export
 
 Generic CSV import / export for Workers CMS, extracted from the host CMS so the core
-stays lean. One Worker, no database of its own — all page data flows through the host
-Plugin API at `{CMS_URL}/__cms/*`.
+stays lean. One Worker, no database of its own — page data flows through the host
+Plugin API at `{CMS_URL}/__cms/*`; type setup writes use the destination CMS's
+authenticated type-admin routes.
 
 ## Features
 
 - **Export** any page type (or every type at once) to CSV: one column per blueprint
   field (localized fields expand per language, e.g. `name.en`), columns discovered from
-  page data, plus one `tag:<taxonomy>` column per taxonomy. Numeric-looking cells are
+  page data, plus one `tag:<taxonomy>` column per taxonomy and explicit `page_type` /
+  `block_type` metadata columns. Numeric-looking cells are
   `="…"`-armored and formula triggers are neutralized (CSV-injection guard).
+- **Type setup export**: download `content-types-export-*.json` from the plugin home
+  to inventory page types, structured block types, field paths, languages, and taxonomies
+  before importing into another environment. Hosts that expose raw type definitions also
+  include the original blueprints in this file.
+- **Type setup import**: upload that JSON on the plugin home to review and create missing
+  database-defined block/page types in the destination. Block types are created first so page
+  block lists can resolve. Existing config, plugin, and database definitions are skipped and
+  never overwritten; languages and taxonomies are reported but are not changed by this feature.
 - **Advanced-search export**: accepts the exact query string of the admin
   advanced-search page (`search1`/`path1`/`tags1`…, `operator`, `page_type`, `sort`,
   `order`) at `…/export-search`, so the host links its "Export CSV" button here.
@@ -24,6 +34,15 @@ Plugin API at `{CMS_URL}/__cms/*`.
   "Export all page types" file round-trips through "Import all page types". Rows with
   a missing or unknown `page_type` are skipped (a typo can never mint a junk type) and
   reported on the preview screen.
+- Structured block fields and `block_type` metadata are preserved when their columns are
+  present in the CSV, including fields discovered from stored lect data.
+
+After importing the type setup, use **Import all page types** for the CSV. Rows with missing or
+unknown `page_type` remain skipped and are reported rather than being created under an unintended
+type. The type bulk action requires the destination CMS's `pagetype:write` and `blocktype:write`
+permissions (the native fallback forms use the same permissions). Approve the plugin's
+**Type setup importer** asset under Plugins → import-export → Assets; individual native forms are
+also available on the review screen if the asset has not been approved yet.
 
 ## Setup
 
@@ -33,7 +52,9 @@ Plugin API at `{CMS_URL}/__cms/*`.
 3. **Approve the wildcard page-type access**: Plugins → import-export → Page types →
    approve `*` for read and write. Without this every call returns
    `forbidden_page_type`.
-4. The sidebar gains an "Import / Export" entry under Settings. The host's per-list
+4. **Approve the Type setup importer asset**: Plugins → import-export → Assets → approve
+   `type-import.js`. The review screen still includes individual native forms if you skip this.
+5. The sidebar gains an "Import / Export" entry under Settings. The host's per-list
    Import/Export buttons and the advanced-search "Export CSV" button link here
    automatically when the plugin is registered.
 
@@ -75,6 +96,9 @@ secret` / `.dev.vars`) and the plugin synthesizes one tenant with no KV needed �
 - The legacy JSON import (`/admin/pages/import/:type` textarea) was **not** ported —
   batch-create via the Plugin API covers the use case; open an issue if you relied on
   its uuid-upsert behavior.
+- Type setup import requires the destination CMS's runtime content-types feature and an
+  operator with `pagetype:write` / `blocktype:write`; it does not install missing CMS
+  features or create taxonomies/languages.
 - Requires host CMS ≥ the version that ships `GET /__cms/content-meta`,
   `POST /__cms/tags/ensure`, and the `ids`/`slugs`/`include_tags` parameters on
   `GET /__cms/pages` (added together with this plugin's extraction).

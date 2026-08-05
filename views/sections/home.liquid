@@ -1,14 +1,22 @@
 <div class="min-w-0 max-w-4xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
   <div class="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
-    <h2 class="text-2xl font-bold text-gray-900">Import / Export</h2>
+    <h2 class="text-2xl font-bold text-gray-900">{{ "import-export.views.home.title" | t }}</h2>
     <div class="flex flex-col gap-2 sm:flex-row">
+      <a href="{{ exportTypesHref }}"
+         class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+        {{ "import-export.views.home.export_type_setup" | t }}
+      </a>
+      <a href="{{ importTypesHref }}"
+         class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700">
+        {{ "import-export.views.home.import_type_setup" | t }}
+      </a>
       <a href="{{ importAllHref }}"
          class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-        Import all page types
+        {{ "import-export.views.home.import_all_page_types" | t }}
       </a>
       <a href="{{ exportAllHref }}"
          class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-        Export all page types
+        {{ "import-export.views.home.export_all_page_types" | t }}
       </a>
     </div>
   </div>
@@ -17,8 +25,8 @@
     <table class="w-full min-w-[400px] text-left">
       <thead class="bg-gray-50">
         <tr>
-          <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Page Type</th>
-          <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">Actions</th>
+          <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.home.page_type" | t }}</th>
+          <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right">{{ "import-export.views.home.actions" | t }}</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100">
@@ -30,9 +38,9 @@
             <td class="px-4 py-3 text-right">
               <div class="inline-flex items-center gap-2">
                 <a href="{{ entry.importHref }}"
-                   class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">Import</a>
+                   class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">{{ "import-export.views.common.import" | t }}</a>
                 <a href="{{ entry.exportHref }}"
-                   class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">Export CSV</a>
+                   class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">{{ "import-export.views.common.export_csv" | t }}</a>
               </div>
             </td>
           </tr>
@@ -42,9 +50,16 @@
   </div>
 
   <p class="mt-4 text-sm text-gray-500">
-    Exports include every draft page of the type, one CSV column per blueprint field
-    (localized fields expand per language) plus one <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">tag:taxonomy</code>
-    column per taxonomy. Imports match rows to existing pages by <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">id</code>
-    or <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">slug</code> and preview every change before applying.
+    {{ "import-export.views.home.exports_include_every_draft" | t }}
+    {{ "import-export.views.home.one_column_per_blueprint_field" | t }}
+    ({{ "import-export.views.home.localized_fields_expand" | t }}) {{ "import-export.views.home.plus_taxonomy_columns" | t }}
+    <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">tag:taxonomy</code>
+    {{ "import-export.views.home.columns_per_taxonomy" | t }}, {{ "import-export.views.home.plus_metadata_columns" | t }}
+    <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">page_type</code> {{ "import-export.views.home.and" | t }}
+    <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">block_type</code>.
+    {{ "import-export.views.home.imports_match_by" | t }} <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">id</code>
+    {{ "import-export.views.home.or" | t }} <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">slug</code>
+    {{ "import-export.views.home.preview_before_applying" | t }}
+    {{ "import-export.views.home.use_export_type_setup" | t }}
   </p>
 </div>

@@ -4,6 +4,9 @@
 // Routes (rest after /__plugin/admin):
 //   GET  ""                          → home: per-type import/export index
 //   GET  export?page_type=X          → CSV download (all pages of X; omit = every type)
+//   GET  export-types                → JSON page/block type setup inventory
+//   GET  import-types                 → type setup JSON upload form
+//   POST import-types                 → validate + preview type setup
 //   GET  export-search?<as-query>    → CSV of an admin advanced-search result
 //   GET  import/<type>               → upload form
 //   POST import/<type>               → parse + classify → preview/confirm view
@@ -20,8 +23,10 @@ import { adminView, notFoundView, parseCmsUser, redirect, serveViewAsset } from 
 import { CmsApiError, CmsClient, CREATE_BATCH_SIZE, chunk, tagKey, type CmsPage, type ContentMeta, type SearchCriterion } from './cms';
 import {
   ALL_PAGE_TYPES,
+  buildContentTypeSetupExport,
   buildExportCsv,
   csvDownloadResponse,
+  csvImportPathSpecs,
   csvImportMode,
   csvImportModeOptions,
   csvPathSpecs,
@@ -29,8 +34,10 @@ import {
   exportHeaders,
   groupEntriesByType,
   importRowId,
+  jsonDownloadResponse,
   matchImportTargets,
   parseCsv,
+  parseContentTypeSetupImport,
   prepareCreateFromRow,
   prepareUpdateFromRow,
   previewImportRows,
@@ -38,6 +45,7 @@ import {
   rowTagEntries,
   type CsvImportMode,
   type CsvRowEntry,
+  type ContentTypeSetupExport,
   type PreparedCreate,
 } from './csv';
 
@@ -52,6 +60,7 @@ const BASE = '/admin/plugins/import-export';
 
 /** Write calls (batch create / update / tag ensure) allowed per confirm pass. */
 const WRITE_BUDGET = 40;
+const TYPE_SETUP_MAX_BYTES = 4 * 1024 * 1024;
 
 export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Promise<Response> {
   const rest = url.pathname.slice('/__plugin/admin'.length).replace(/^\/+|\/+$/g, '');
@@ -62,6 +71,9 @@ export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Pr
   if (segments[0] === 'views') {
     return serveViewAsset(env.VIEWS, `/${segments.slice(1).join('/')}`);
   }
+  if (segments[0] === 'assets') {
+    return serveViewAsset(env.VIEWS, `/${segments.join('/')}`);
+  }
 
   const user = parseCmsUser(request.headers.get('x-cms-user'));
 
@@ -71,7 +83,10 @@ export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Pr
   } catch {
     return adminView(env.VIEWS, 'Import / Export', 'error', {
       heading: 'Not configured',
+      headingKey: 'import-export.views.error.not_configured',
       message: 'CMS_URL / PLUGIN_SECRET are not configured for this plugin Worker.',
+      messageKey: 'import-export.views.error.not_configured_message',
+      showConfig: true,
     });
   }
 
@@ -80,6 +95,13 @@ export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Pr
 
     if (segments[0] === 'export' && request.method === 'GET') {
       return exportPages(cms, url.searchParams.get('page_type') ?? segments[1] ?? '');
+    }
+    if (segments[0] === 'export-types' && request.method === 'GET') {
+      return exportTypeSetup(cms);
+    }
+    if (segments[0] === 'import-types') {
+      if (request.method === 'GET') return importTypeSetupForm(cms, env);
+      if (request.method === 'POST') return importTypeSetupPreview(cms, env, request);
     }
     if (segments[0] === 'export-search' && request.method === 'GET') {
       return exportSearch(cms, url);
@@ -96,6 +118,7 @@ export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Pr
     if (error instanceof CmsApiError) {
       return adminView(env.VIEWS, 'Import / Export', 'error', {
         heading: 'CMS request failed',
+        headingKey: 'import-export.views.error.cms_request_failed',
         message: `The CMS responded ${error.status} (${error.code}) on ${error.method} ${error.path}. `
           + 'If this is a forbidden_page_type error, approve this plugin\'s "*" page-type access under Plugins → import-export → Page types.',
       });
@@ -116,6 +139,8 @@ async function home(cms: CmsClient, env: AdminEnv): Promise<Response> {
       listHref: `/admin/pages/list/${encodeURIComponent(pageType)}`,
     })),
     exportAllHref: `${BASE}/export`,
+    exportTypesHref: `${BASE}/export-types`,
+    importTypesHref: `${BASE}/import-types`,
     importAllHref: `${BASE}/import/${ALL_PAGE_TYPES}`,
   });
 }
@@ -136,6 +161,135 @@ async function exportPages(cms: CmsClient, pageType: string): Promise<Response> 
   const csv = buildExportCsv(meta, pages, types);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   return csvDownloadResponse(csv, `${requested || 'pages'}-export-${stamp}.csv`);
+}
+
+async function exportTypeSetup(cms: CmsClient): Promise<Response> {
+  const meta = await cms.meta('all');
+  const pages: CmsPage[] = [];
+  for (const pageType of meta.page_types) {
+    pages.push(...await cms.listAll(pageType));
+  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return jsonDownloadResponse(
+    {
+      ...buildContentTypeSetupExport(meta, pages),
+      exported_at: new Date().toISOString(),
+    },
+    `content-types-export-${stamp}.json`,
+  );
+}
+
+// ── Type setup import ───────────────────────────────────────────────────────
+
+async function importTypeSetupForm(cms: CmsClient, env: AdminEnv, error = ''): Promise<Response> {
+  // Keep the form cheap: the destination inventory is only needed after a
+  // valid file has been submitted and is rendered on the preview screen.
+  void cms;
+  return adminView(env.VIEWS, 'Import type setup', 'type-import', {
+    isConfirmTypeImport: false,
+    action: `${BASE}/import-types`,
+    backHref: BASE,
+    importError: error,
+    hasImportError: Boolean(error),
+  });
+}
+
+async function importTypeSetupPreview(cms: CmsClient, env: AdminEnv, request: Request): Promise<Response> {
+  const form = await request.formData();
+  const file = form.get('file');
+  let jsonText = typeof form.get('json') === 'string' ? String(form.get('json')) : '';
+  if (file && typeof file === 'object' && 'text' in file && (file as File).size > 0) {
+    if ((file as File).size > TYPE_SETUP_MAX_BYTES) {
+      return importTypeSetupForm(cms, env, `The type setup file is too large. The maximum is ${TYPE_SETUP_MAX_BYTES / 1024 / 1024} MB.`);
+    }
+    jsonText = await (file as File).text();
+  }
+  if (new TextEncoder().encode(jsonText).byteLength > TYPE_SETUP_MAX_BYTES) {
+    return importTypeSetupForm(cms, env, `The type setup file is too large. The maximum is ${TYPE_SETUP_MAX_BYTES / 1024 / 1024} MB.`);
+  }
+  if (!jsonText.trim()) return importTypeSetupForm(cms, env, 'Choose a JSON file or paste the exported type setup first.');
+
+  const parsed = parseContentTypeSetupImport(jsonText);
+  if (!parsed.setup) {
+    return importTypeSetupForm(cms, env, [...parsed.errors, ...parsed.warnings].join(' '));
+  }
+
+  const meta = await cms.meta('all');
+  const setup = setupForDestination(parsed.setup, meta);
+  const existingPageTypes = new Set(meta.page_types);
+  const existingBlockTypes = new Set(Object.keys(meta.block_type_definitions ?? {}));
+  const pageTypes = setup.page_types.map((type) => ({
+    kind: 'page',
+    slug: type.page_type,
+    name: type.name,
+    status: existingPageTypes.has(type.page_type) ? 'existing' : 'create',
+    blueprintJson: JSON.stringify(type.blueprint),
+    blockTypes: type.block_types,
+    taxonomyTypes: type.taxonomy_types,
+  }));
+  const blockTypes = setup.block_types.map((type) => ({
+    kind: 'block',
+    slug: type.block_type,
+    name: type.name,
+    // Older hosts do not return block slugs in content-meta, so the browser
+    // bulk importer refreshes /admin/block_types before deciding to create.
+    status: existingBlockTypes.has(type.block_type) ? 'existing' : 'create',
+    blueprintJson: JSON.stringify(type.blueprint),
+  }));
+  const warnings = [
+    ...parsed.warnings,
+    ...setupImportWarnings(parsed.setup, meta),
+  ];
+
+  return adminView(env.VIEWS, 'Import type setup', 'type-import', {
+    isConfirmTypeImport: true,
+    action: `${BASE}/import-types`,
+    backHref: BASE,
+    setupJson: JSON.stringify(setup),
+    pageTypes,
+    blockTypes,
+    warnings,
+    hasWarnings: warnings.length > 0,
+    pageTypeCount: pageTypes.length,
+    blockTypeCount: blockTypes.length,
+    createPageTypeCount: pageTypes.filter((type) => type.status === 'create').length,
+    createBlockTypeCount: blockTypes.filter((type) => type.status === 'create').length,
+    hasPageTypes: pageTypes.length > 0,
+    hasBlockTypes: blockTypes.length > 0,
+    importAssetHref: `${BASE}/assets/type-import.js`,
+  });
+}
+
+/** Do not write taxonomy rows here; only keep page selections that exist on the destination. */
+function setupForDestination(setup: ContentTypeSetupExport, meta: ContentMeta): ContentTypeSetupExport {
+  const taxonomies = new Set(meta.taxonomies.map((taxonomy) => taxonomy.slug));
+  return {
+    ...setup,
+    page_types: setup.page_types.map((type) => ({
+      ...type,
+      taxonomy_types: type.taxonomy_types.filter((slug) => taxonomies.has(slug)),
+    })),
+  };
+}
+
+function setupImportWarnings(setup: ContentTypeSetupExport, meta: ContentMeta): string[] {
+  const warnings: string[] = [];
+  const targetTaxonomies = new Set(meta.taxonomies.map((taxonomy) => taxonomy.slug));
+  const missingTaxonomies = setup.taxonomies
+    .map((taxonomy) => taxonomy.slug)
+    .filter((slug) => !targetTaxonomies.has(slug));
+  if (missingTaxonomies.length > 0) {
+    warnings.push(`These taxonomies are not present on the destination and will not be selected: ${missingTaxonomies.join(', ')}.`);
+  }
+  if (setup.default_language !== meta.default_language || setup.languages.some((language) => !meta.languages.includes(language))) {
+    warnings.push('The destination language configuration differs; type blueprints will be imported, but languages are not changed by this feature.');
+  }
+  const underscored = [...setup.page_types.map((type) => type.page_type), ...setup.block_types.map((type) => type.block_type)]
+    .filter((slug) => slug.includes('_'));
+  if (underscored.length > 0) {
+    warnings.push(`The CMS type form normalizes underscores in new slugs. Existing config/plugin types such as ${underscored.join(', ')} are safe to skip; a missing underscored type may need to be created in its owning plugin or config.`);
+  }
+  return warnings;
 }
 
 /** Mirrors the host page-list export ordering: weight then name (type first when exporting all). */
@@ -367,11 +521,12 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
     ? await (async () => { writes += Math.ceil(tagEntries.size / 200); return cms.ensureTags([...tagEntries.values()]); })()
     : new Map<string, number>();
 
+  const csvHeaders = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   const specsByType = new Map<string, ReturnType<typeof csvPathSpecs>>();
   const pathSpecsFor = (type: string) => {
     let specs = specsByType.get(type);
     if (!specs) {
-      specs = csvPathSpecs(meta, [type], true);
+      specs = csvImportPathSpecs(meta, [type], csvHeaders, true);
       specsByType.set(type, specs);
     }
     return specs;

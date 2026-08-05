@@ -27,6 +27,8 @@ export interface CsvImportModeOption {
   value: CsvImportMode;
   label: string;
   description: string;
+  labelKey: string;
+  descriptionKey: string;
   destructive: boolean;
 }
 
@@ -35,36 +37,48 @@ export const CSV_IMPORT_MODE_OPTIONS: CsvImportModeOption[] = [
     value: 'new-append',
     label: 'New + Add Missing Fields',
     description: 'Create new pages and fill empty fields or add tags on existing pages.',
+    labelKey: 'import-export.import_modes.new_append.label',
+    descriptionKey: 'import-export.import_modes.new_append.description',
     destructive: false,
   },
   {
     value: 'new',
     label: 'New Pages Only',
     description: 'Create only rows that do not match an existing draft page.',
+    labelKey: 'import-export.import_modes.new.label',
+    descriptionKey: 'import-export.import_modes.new.description',
     destructive: false,
   },
   {
     value: 'new-overwrite',
     label: 'New + Replace Existing Fields',
     description: 'Create new pages and replace matching fields on existing pages.',
+    labelKey: 'import-export.import_modes.new_overwrite.label',
+    descriptionKey: 'import-export.import_modes.new_overwrite.description',
     destructive: true,
   },
   {
     value: 'append',
     label: 'Existing Pages: Add Missing Fields',
     description: 'Only fill empty fields or add tags on existing pages.',
+    labelKey: 'import-export.import_modes.append.label',
+    descriptionKey: 'import-export.import_modes.append.description',
     destructive: false,
   },
   {
     value: 'overwrite',
     label: 'Existing Pages: Replace Fields',
     description: 'Only replace matching fields on existing pages.',
+    labelKey: 'import-export.import_modes.overwrite.label',
+    descriptionKey: 'import-export.import_modes.overwrite.description',
     destructive: true,
   },
   {
     value: 'force-new',
     label: 'Treat All Rows As New Pages',
     description: 'Create every CSV row as a new draft page, even when it matches an existing page.',
+    labelKey: 'import-export.import_modes.force_new.label',
+    descriptionKey: 'import-export.import_modes.force_new.description',
     destructive: false,
   },
 ];
@@ -207,6 +221,53 @@ export function csvPathSpecs(meta: ContentMeta, pageTypes: string[], includeLega
   return specs;
 }
 
+/**
+ * Blueprint columns plus safe specs inferred from the CSV headers themselves.
+ *
+ * Export discovers fields that are present in stored lect data (notably
+ * structured `_blocks`). Import used to consider only the blueprint, which
+ * meant an exported block field could silently disappear on re-import. Header
+ * inference keeps those data-only fields round-trippable while reserving page
+ * metadata and taxonomy columns for their dedicated handlers.
+ */
+export function csvImportPathSpecs(
+  meta: ContentMeta,
+  pageTypes: string[],
+  headers: Iterable<string>,
+  includeLegacyLocalized = true,
+): CsvPathSpec[] {
+  const specs = csvPathSpecs(meta, pageTypes, includeLegacyLocalized);
+  const seen = new Set(specs.map((spec) => spec.header));
+  const reserved = new Set([
+    'id', 'uuid', 'name', 'slug', 'weight', 'start', 'end', 'timezone',
+    'page_type', 'block_type',
+  ]);
+
+  for (const rawHeader of headers) {
+    const header = rawHeader.trim();
+    if (!header || seen.has(header) || reserved.has(header) || header.startsWith('tag:')) continue;
+
+    const localizedMatch = header.match(/^(.+)\.([a-z0-9-]+)$/i);
+    if (localizedMatch && meta.languages.includes(localizedMatch[2])) {
+      specs.push({
+        header,
+        sourcePath: localizedMatch[1],
+        kind: 'localized',
+        language: localizedMatch[2],
+      });
+    } else {
+      specs.push({
+        header,
+        sourcePath: header,
+        kind: dataCsvPathKind(header),
+      });
+    }
+    seen.add(header);
+  }
+
+  return specs;
+}
+
 /** Blueprint columns plus columns discovered in the exported pages' lect data. */
 export function exportCsvPathSpecs(meta: ContentMeta, pageTypes: string[], lects: Lect[]): CsvPathSpec[] {
   const specs = new Map<string, CsvPathSpec>();
@@ -262,7 +323,7 @@ function addDataCsvPathSpec(specs: Map<string, CsvPathSpec>, spec: CsvPathSpec):
 }
 
 function dataCsvPathKind(path: string): BlueprintPathKind {
-  return path.startsWith('_pointers.') ? 'pointer' : 'scalar';
+  return path.includes('_pointers.') ? 'pointer' : 'scalar';
 }
 
 function isCsvScalar(value: unknown): value is string | number | boolean | null {
@@ -274,7 +335,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function shouldSkipDataCsvPath(key: string, parentPath: string): boolean {
-  return !parentPath && ['_modifier', '_type', '_updated_at'].includes(key);
+  return !parentPath && ['_id', '_modifier', '_name', '_type', '_updated_at', '_weight'].includes(key);
 }
 
 // ── Lect path get/set ────────────────────────────────────────────────────────
@@ -372,6 +433,390 @@ export function setLectPathValue(lect: Lect, path: string, kind: BlueprintPathKi
 
 // ── Export ───────────────────────────────────────────────────────────────────
 
+/** Unique structured block-type slugs stored on a page, in first-seen order. */
+export function blockTypesForLect(lect: Lect): string[] {
+  if (!Array.isArray(lect._blocks)) return [];
+  const types: string[] = [];
+  for (const block of lect._blocks) {
+    if (!isPlainRecord(block)) continue;
+    const type = typeof block._type === 'string' ? block._type.trim() : '';
+    if (type && !types.includes(type)) types.push(type);
+  }
+  return types;
+}
+
+export interface SetupPathSpec {
+  path: string;
+  kind: BlueprintPathKind;
+}
+
+type SetupBlueprintEntry = string | Record<string, SetupBlueprintEntry[]>;
+
+/** Reconstructs a generic CMS blueprint from the path-only metadata of older hosts. */
+function blueprintFromPathSpecs(specs: SetupPathSpec[]): unknown[] {
+  const blueprint: SetupBlueprintEntry[] = [];
+  const seen = new Set<string>();
+
+  for (const spec of specs) {
+    const normalizedPath = spec.path.trim();
+    if (!normalizedPath || seen.has(`${spec.kind}:${normalizedPath}`)) continue;
+    seen.add(`${spec.kind}:${normalizedPath}`);
+
+    const segments = normalizedPath.split('.').filter(Boolean);
+    if (!segments.length) continue;
+    const pointerIndex = segments.indexOf('_pointers');
+    const fieldSegments = pointerIndex >= 0
+      ? [...segments.slice(0, pointerIndex), ...segments.slice(pointerIndex + 1)]
+      : segments;
+    if (!fieldSegments.length) continue;
+
+    const field = fieldSegments.pop()!;
+    const fieldName = spec.kind === 'pointer' ? `*${field}` : spec.kind === 'scalar' ? `@${field}` : field;
+    let target = blueprint;
+    for (const segment of fieldSegments) {
+      const repeatable = segment.endsWith('[*]');
+      const key = repeatable ? segment.slice(0, -3) : segment;
+      if (!key) continue;
+      let child = target.find((entry): entry is Record<string, SetupBlueprintEntry[]> => (
+        isPlainRecord(entry) && Array.isArray(entry[key])
+      ));
+      if (!child) {
+        child = { [key]: [] };
+        target.push(child);
+      }
+      target = child[key];
+      if (!repeatable) continue;
+    }
+    if (!target.includes(fieldName)) target.push(fieldName);
+  }
+
+  return blueprint;
+}
+
+export interface ContentTypeSetupExport {
+  format: '0xCMS content-type-setup';
+  version: 1;
+  languages: string[];
+  default_language: string;
+  taxonomies: Array<{ name: string; slug: string }>;
+  page_types: Array<{
+    page_type: string;
+    name: string;
+    blueprint: unknown[];
+    blueprint_source: 'host' | 'observed-paths';
+    block_types: string[];
+    taxonomy_types: string[];
+    path_specs: SetupPathSpec[];
+  }>;
+  block_types: Array<{
+    block_type: string;
+    name: string;
+    blueprint: unknown[];
+    blueprint_source: 'host' | 'observed-paths';
+    path_specs: SetupPathSpec[];
+  }>;
+}
+
+export interface ContentTypeSetupImportResult {
+  setup: ContentTypeSetupExport | null;
+  errors: string[];
+  warnings: string[];
+}
+
+const CONTENT_TYPE_SETUP_FORMAT = '0xCMS content-type-setup';
+const CONTENT_TYPE_SETUP_VERSION = 1;
+const TYPE_SLUG_PATTERN = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
+
+/**
+ * Validates and normalizes a type-setup export before it is shown to an
+ * operator or sent to the destination CMS's type-admin forms. The importer
+ * is deliberately create-only: an existing type is left untouched, so a
+ * setup file cannot silently change a live site's blueprint.
+ */
+export function parseContentTypeSetupImport(input: string | unknown): ContentTypeSetupImportResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  let raw: unknown = input;
+
+  if (typeof input === 'string') {
+    try {
+      raw = JSON.parse(input);
+    } catch {
+      return { setup: null, errors: ['The type setup file is not valid JSON.'], warnings };
+    }
+  }
+  if (!isPlainRecord(raw)) {
+    return { setup: null, errors: ['The type setup must be a JSON object.'], warnings };
+  }
+
+  if (raw.format !== CONTENT_TYPE_SETUP_FORMAT) {
+    errors.push(`Unsupported type setup format. Expected "${CONTENT_TYPE_SETUP_FORMAT}".`);
+  }
+  if (raw.version !== CONTENT_TYPE_SETUP_VERSION) {
+    errors.push(`Unsupported type setup version. Expected ${CONTENT_TYPE_SETUP_VERSION}.`);
+  }
+
+  const languages = setupStringList(raw.languages, 'languages', errors);
+  const defaultLanguage = setupString(raw.default_language, 'default_language', errors);
+  if (defaultLanguage && languages.length > 0 && !languages.includes(defaultLanguage)) {
+    errors.push(`default_language "${defaultLanguage}" is not listed in languages.`);
+  }
+
+  const taxonomies = setupTaxonomies(raw.taxonomies, errors);
+  const pageTypes = setupPageTypes(raw.page_types, errors);
+  const blockTypes = setupBlockTypes(raw.block_types, errors);
+
+  const pageSlugs = new Set(pageTypes.map((entry) => entry.page_type));
+  const blockSlugs = new Set(blockTypes.map((entry) => entry.block_type));
+  for (const pageType of pageTypes) {
+    for (const blockType of pageType.block_types) {
+      if (!blockSlugs.has(blockType)) {
+        warnings.push(`Page type "${pageType.page_type}" references block type "${blockType}", which is not included in the file.`);
+      }
+    }
+  }
+  if (pageSlugs.size !== pageTypes.length) errors.push('The file contains duplicate page_type values.');
+  if (blockSlugs.size !== blockTypes.length) errors.push('The file contains duplicate block_type values.');
+
+  if (errors.length > 0) return { setup: null, errors, warnings };
+
+  return {
+    setup: {
+      format: CONTENT_TYPE_SETUP_FORMAT,
+      version: CONTENT_TYPE_SETUP_VERSION,
+      languages,
+      default_language: defaultLanguage,
+      taxonomies,
+      page_types: pageTypes,
+      block_types: blockTypes,
+    },
+    errors,
+    warnings,
+  };
+}
+
+function setupString(value: unknown, path: string, errors: string[]): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    errors.push(`${path} must be a non-empty string.`);
+    return '';
+  }
+  return value.trim();
+}
+
+function setupStringList(value: unknown, path: string, errors: string[]): string[] {
+  if (!Array.isArray(value)) {
+    errors.push(`${path} must be an array of strings.`);
+    return [];
+  }
+  const result: string[] = [];
+  for (const [index, item] of value.entries()) {
+    if (typeof item !== 'string' || !item.trim()) {
+      errors.push(`${path}[${index}] must be a non-empty string.`);
+      continue;
+    }
+    const entry = item.trim();
+    if (!result.includes(entry)) result.push(entry);
+  }
+  return result;
+}
+
+function setupSlug(value: unknown, path: string, errors: string[]): string {
+  const slug = setupString(value, path, errors);
+  if (slug && !TYPE_SLUG_PATTERN.test(slug)) {
+    errors.push(`${path} "${slug}" is not a CMS-safe slug (use lowercase letters, numbers, hyphens, or underscores).`);
+  }
+  return slug;
+}
+
+function setupBlueprint(value: unknown, path: string, errors: string[]): unknown[] {
+  if (!Array.isArray(value)) {
+    errors.push(`${path} must be a JSON array.`);
+    return [];
+  }
+  return value;
+}
+
+function setupPathSpecs(value: unknown, path: string, errors: string[]): SetupPathSpec[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    errors.push(`${path} must be an array.`);
+    return [];
+  }
+  const specs: SetupPathSpec[] = [];
+  for (const [index, item] of value.entries()) {
+    if (!isPlainRecord(item) || typeof item.path !== 'string' || !item.path.trim()) {
+      errors.push(`${path}[${index}] must contain a non-empty path.`);
+      continue;
+    }
+    if (item.kind !== 'scalar' && item.kind !== 'localized' && item.kind !== 'pointer') {
+      errors.push(`${path}[${index}].kind must be scalar, localized, or pointer.`);
+      continue;
+    }
+    specs.push({ path: item.path.trim(), kind: item.kind });
+  }
+  return specs;
+}
+
+function setupTaxonomies(value: unknown, errors: string[]): Array<{ name: string; slug: string }> {
+  if (!Array.isArray(value)) {
+    errors.push('taxonomies must be an array.');
+    return [];
+  }
+  const taxonomies: Array<{ name: string; slug: string }> = [];
+  for (const [index, item] of value.entries()) {
+    if (!isPlainRecord(item)) {
+      errors.push(`taxonomies[${index}] must be an object.`);
+      continue;
+    }
+    const slug = setupSlug(item.slug, `taxonomies[${index}].slug`, errors);
+    const name = setupString(item.name, `taxonomies[${index}].name`, errors);
+    if (slug && name && !taxonomies.some((entry) => entry.slug === slug)) taxonomies.push({ name, slug });
+  }
+  return taxonomies;
+}
+
+function setupPageTypes(value: unknown, errors: string[]): ContentTypeSetupExport['page_types'] {
+  if (!Array.isArray(value)) {
+    errors.push('page_types must be an array.');
+    return [];
+  }
+  const pageTypes: ContentTypeSetupExport['page_types'] = [];
+  for (const [index, item] of value.entries()) {
+    if (!isPlainRecord(item)) {
+      errors.push(`page_types[${index}] must be an object.`);
+      continue;
+    }
+    const pageType = setupSlug(item.page_type, `page_types[${index}].page_type`, errors);
+    const name = setupString(item.name, `page_types[${index}].name`, errors);
+    const blueprint = setupBlueprint(item.blueprint, `page_types[${index}].blueprint`, errors);
+    const blockTypes = setupStringList(item.block_types ?? item.block_lists, `page_types[${index}].block_types`, errors);
+    const taxonomyTypes = setupStringList(item.taxonomy_types ?? item.taxonomy_lists, `page_types[${index}].taxonomy_types`, errors);
+    const pathSpecs = setupPathSpecs(item.path_specs, `page_types[${index}].path_specs`, errors);
+    if (!pageType || !name) continue;
+    pageTypes.push({
+      page_type: pageType,
+      name,
+      blueprint,
+      blueprint_source: item.blueprint_source === 'host' ? 'host' : 'observed-paths',
+      block_types: blockTypes,
+      taxonomy_types: taxonomyTypes,
+      path_specs: pathSpecs,
+    });
+  }
+  return pageTypes;
+}
+
+function setupBlockTypes(value: unknown, errors: string[]): ContentTypeSetupExport['block_types'] {
+  if (!Array.isArray(value)) {
+    errors.push('block_types must be an array.');
+    return [];
+  }
+  const blockTypes: ContentTypeSetupExport['block_types'] = [];
+  for (const [index, item] of value.entries()) {
+    if (!isPlainRecord(item)) {
+      errors.push(`block_types[${index}] must be an object.`);
+      continue;
+    }
+    const blockType = setupSlug(item.block_type, `block_types[${index}].block_type`, errors);
+    const name = setupString(item.name, `block_types[${index}].name`, errors);
+    const blueprint = setupBlueprint(item.blueprint, `block_types[${index}].blueprint`, errors);
+    const pathSpecs = setupPathSpecs(item.path_specs, `block_types[${index}].path_specs`, errors);
+    if (!blockType || !name) continue;
+    blockTypes.push({
+      block_type: blockType,
+      name,
+      blueprint,
+      blueprint_source: item.blueprint_source === 'host' ? 'host' : 'observed-paths',
+      path_specs: pathSpecs,
+    });
+  }
+  return blockTypes;
+}
+
+/**
+ * Builds a small, machine-readable inventory for recreating content types on
+ * another CMS host. Newer hosts may provide raw blueprints through
+ * `content-meta`; older hosts still get page/block names and observed field
+ * paths, which is enough to identify the missing setup before importing pages.
+ */
+export function buildContentTypeSetupExport(meta: ContentMeta, pages: CmsPage[]): ContentTypeSetupExport {
+  const pageLectsByType = new Map<string, Lect[]>();
+  const blockLectsByType = new Map<string, Lect[]>();
+
+  for (const page of pages) {
+    const pageType = (page.page_type ?? '').trim();
+    const lect = isPlainRecord(page.lect) ? page.lect as Lect : {};
+    if (pageType) {
+      const pageLects = pageLectsByType.get(pageType) ?? [];
+      pageLects.push(lect);
+      pageLectsByType.set(pageType, pageLects);
+    }
+    if (!Array.isArray(lect._blocks)) continue;
+    for (const block of lect._blocks) {
+      if (!isPlainRecord(block)) continue;
+      const blockType = typeof block._type === 'string' ? block._type.trim() : '';
+      if (!blockType) continue;
+      const blockLects = blockLectsByType.get(blockType) ?? [];
+      blockLects.push(block as Lect);
+      blockLectsByType.set(blockType, blockLects);
+    }
+  }
+
+  const pageTypes = [...new Set([...meta.page_types, ...pageLectsByType.keys()])];
+  const pageTypeEntries = pageTypes.map((pageType) => {
+    const definition = meta.page_type_definitions?.[pageType];
+    const pageSpecs = meta.path_specs[pageType] ?? [];
+    const blockTypes = new Set<string>(definition?.block_types ?? definition?.block_lists ?? []);
+    for (const lect of pageLectsByType.get(pageType) ?? []) {
+      for (const blockType of blockTypesForLect(lect)) blockTypes.add(blockType);
+    }
+    return {
+      page_type: pageType,
+      name: definition?.name ?? pageType,
+      blueprint: definition?.blueprint ?? blueprintFromPathSpecs(pageSpecs),
+      blueprint_source: definition?.blueprint ? 'host' as const : 'observed-paths' as const,
+      block_types: [...blockTypes],
+      taxonomy_types: definition?.taxonomy_types ?? definition?.taxonomy_lists ?? meta.taxonomies.map((taxonomy) => taxonomy.slug),
+      path_specs: pageSpecs,
+    };
+  });
+
+  const blockTypes = [...new Set([
+    ...Object.keys(meta.block_type_definitions ?? {}),
+    ...pageTypeEntries.flatMap((entry) => entry.block_types),
+    ...blockLectsByType.keys(),
+  ])];
+  const blockTypeEntries = blockTypes.map((blockType) => {
+    const definition = meta.block_type_definitions?.[blockType];
+    const specs = new Map<string, SetupPathSpec>();
+    for (const lect of blockLectsByType.get(blockType) ?? []) {
+      const discovered = new Map<string, CsvPathSpec>();
+      collectDataCsvPathSpecs(meta, lect, '', discovered);
+      for (const spec of discovered.values()) {
+        if (!spec.sourcePath || (spec.sourcePath.startsWith('_') && !spec.sourcePath.startsWith('_pointers.'))) continue;
+        specs.set(spec.sourcePath, { path: spec.sourcePath, kind: spec.kind });
+      }
+    }
+    return {
+      block_type: blockType,
+      name: definition?.name ?? blockType,
+      blueprint: definition?.blueprint ?? blueprintFromPathSpecs([...specs.values()]),
+      blueprint_source: definition?.blueprint ? 'host' as const : 'observed-paths' as const,
+      path_specs: [...specs.values()],
+    };
+  });
+
+  return {
+    format: '0xCMS content-type-setup',
+    version: 1,
+    languages: [...meta.languages],
+    default_language: meta.default_language,
+    taxonomies: [...meta.taxonomies],
+    page_types: pageTypeEntries,
+    block_types: blockTypeEntries,
+  };
+}
+
 export function exportHeaders(pathColumns: CsvPathSpec[], taxonomies: Array<{ name: string }>): string[] {
   return [
     'id',
@@ -383,6 +828,7 @@ export function exportHeaders(pathColumns: CsvPathSpec[], taxonomies: Array<{ na
     'end',
     'timezone',
     'page_type',
+    'block_type',
     ...pathColumns.map((spec) => spec.header),
     ...taxonomies.map((taxonomy) => `tag:${taxonomy.name}`),
   ];
@@ -417,6 +863,7 @@ export function buildExportCsv(meta: ContentMeta, pages: CmsPage[], pageTypes: s
       page.end ?? '',
       page.timezone ?? '',
       page.page_type ?? '',
+      blockTypesForLect(lect).join('; '),
       ...pathColumns.map((spec) => getCsvLectValue(lect, spec, meta.default_language)),
       ...meta.taxonomies.map((taxonomy) => (tagGroups[taxonomy.name] ?? []).join('; ')),
     ]);
@@ -434,6 +881,19 @@ export function csvDownloadResponse(csv: string, filename: string): Response {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Content-Disposition': `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
       'Content-Type': 'text/csv; charset=utf-8',
+      'Expires': '0',
+      'Pragma': 'no-cache',
+    },
+  });
+}
+
+export function jsonDownloadResponse(value: unknown, filename: string): Response {
+  const asciiFilename = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\;,]/g, '_');
+  return new Response(JSON.stringify(value, null, 2), {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Content-Disposition': `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Content-Type': 'application/json; charset=utf-8',
       'Expires': '0',
       'Pragma': 'no-cache',
     },
@@ -557,7 +1017,7 @@ export function previewImportRows(
     const { row, pageType } = entry;
     let pathSpecs = specsByType.get(pageType);
     if (!pathSpecs) {
-      pathSpecs = csvPathSpecs(meta, [pageType], true);
+      pathSpecs = csvImportPathSpecs(meta, [pageType], Object.keys(row), true);
       specsByType.set(pageType, pathSpecs);
     }
 
@@ -625,6 +1085,28 @@ export function rowTagTaxonomies(meta: ContentMeta, row: Record<string, string>)
   return present;
 }
 
+/** Applies the explicit block_type metadata column to a lect. */
+function setBlockTypesFromRow(lect: Lect, row: Record<string, string>, mode: 'replace' | 'append'): boolean {
+  if (!hasCsvColumn(row, 'block_type')) return false;
+  const requested = splitListValue(row.block_type ?? '');
+  const current = Array.isArray(lect._blocks)
+    ? lect._blocks.filter(isPlainRecord) as Lect[]
+    : [];
+
+  if (mode === 'append' && current.length > 0) return false;
+
+  const before = JSON.stringify(lect._blocks ?? null);
+  if (requested.length === 0) {
+    delete lect._blocks;
+  } else {
+    lect._blocks = requested.map((type, index) => ({
+      ...(current[index] ?? {}),
+      _type: type,
+    }));
+  }
+  return before !== JSON.stringify(lect._blocks ?? null);
+}
+
 export interface PreparedCreate {
   page_type: string;
   name: string;
@@ -645,6 +1127,7 @@ export function prepareCreateFromRow(
   ensuredTags: Map<string, number>,
 ): PreparedCreate {
   const lect: Lect = {};
+  setBlockTypesFromRow(lect, row, 'replace');
   for (const spec of pathSpecs) {
     if (!hasCsvColumn(row, spec.header)) continue;
     setLectPathValue(lect, spec.sourcePath, spec.kind, row[spec.header] ?? '', spec.language ?? meta.default_language);
@@ -706,7 +1189,7 @@ export function prepareUpdateFromRow(
   ensuredTags: Map<string, number>,
 ): PreparedUpdate {
   const lect: Lect = isPlainRecord(existing.lect) ? structuredClone(existing.lect) as Lect : {};
-  let lectChanged = false;
+  let lectChanged = setBlockTypesFromRow(lect, row, mode);
   for (const spec of pathSpecs) {
     if (!hasCsvColumn(row, spec.header)) continue;
     const value = row[spec.header] ?? '';

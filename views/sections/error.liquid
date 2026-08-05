@@ -1,8 +1,8 @@
-<div class="flex items-center justify-between gap-4 mb-4"><h1 class="text-2xl font-bold text-gray-900">{{ heading | default: 'Cannot reach the CMS' }}</h1></div>
+<div class="flex items-center justify-between gap-4 mb-4"><h1 class="text-2xl font-bold text-gray-900">{% if headingKey != blank %}{{ headingKey | t }}{% elsif heading != blank %}{{ heading }}{% else %}{{ "import-export.views.error.default_heading" | t }}{% endif %}</h1></div>
 <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-  <p class="text-sm text-gray-500">{{ message }}</p>
+  <p class="text-sm text-gray-500">{% if messageKey != blank %}{{ messageKey | t }}{% else %}{{ message }}{% endif %}</p>
   {% if showConfig %}
-  <p class="text-sm text-gray-500" style="margin-top:.75rem">Set <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">CMS_URL</code> and <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">PLUGIN_SECRET</code> on this plugin Worker
-  (the secret must match the value shown in the CMS admin), then reload.</p>
+  <p class="text-sm text-gray-500" style="margin-top:.75rem">{{ "import-export.views.error.set_cms_url_and_plugin_secret" | t }}
+  ({{ "import-export.views.error.secret_must_match" | t }}).</p>
   {% endif %}
 </div>

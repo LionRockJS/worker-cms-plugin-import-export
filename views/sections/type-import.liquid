@@ -1,0 +1,193 @@
+<div class="min-w-0 max-w-5xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8" data-type-import-root
+     data-type-import-reading="{{ "import-export.views.type_import.reading_destination" | t }}"
+     data-type-import-preview-error="{{ "import-export.views.type_import.preview_payload_error" | t }}"
+     data-type-import-creating="{{ "import-export.views.type_import.creating" | t }}"
+     data-type-import-created="{{ "import-export.views.type_import.created" | t }}"
+     data-type-import-existing="{{ "import-export.views.type_import.existing_unchanged" | t }}"
+     data-type-import-read-error="{{ "import-export.views.type_import.read_error" | t }}"
+     data-type-import-create-error="{{ "import-export.views.type_import.create_error" | t }}"
+     data-type-import-not-created-error="{{ "import-export.views.type_import.not_created_error" | t }}"
+     data-type-import-applied="{{ "import-export.views.type_import.applied" | t }}"
+     data-type-import-apply-error="{{ "import-export.views.type_import.apply_error" | t }}"
+     data-type-import-page-type="{{ "import-export.views.type_import.page_type" | t }}"
+     data-type-import-block-type="{{ "import-export.views.type_import.block_type" | t }}">
+  <div class="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-gray-900">{{ "import-export.views.type_import.title" | t }}</h2>
+      <p class="mt-1 text-sm text-gray-500">{{ "import-export.views.type_import.description" | t }}</p>
+    </div>
+    <a href="{{ backHref }}" class="text-sm text-indigo-600 hover:underline">{{ "import-export.views.common.back" | t }}</a>
+  </div>
+
+  {% if isConfirmTypeImport %}
+    <textarea id="type-import-payload" class="hidden">{{ setupJson }}</textarea>
+
+    <div class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="rounded-lg border border-gray-200 bg-white px-4 py-3">
+        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.page_types" | t }}</div>
+        <div class="mt-1 text-2xl font-semibold text-gray-900">{{ pageTypeCount }}</div>
+        <div class="mt-1 text-xs text-gray-500">{{ createPageTypeCount }} {{ "import-export.views.type_import.missing" | t }}</div>
+      </div>
+      <div class="rounded-lg border border-gray-200 bg-white px-4 py-3">
+        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.block_types" | t }}</div>
+        <div class="mt-1 text-2xl font-semibold text-gray-900">{{ blockTypeCount }}</div>
+        <div class="mt-1 text-xs text-gray-500">{{ createBlockTypeCount }} {{ "import-export.views.type_import.missing_or_to_check" | t }}</div>
+      </div>
+      <div class="rounded-lg border border-gray-200 bg-white px-4 py-3 sm:col-span-2">
+        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.safety" | t }}</div>
+        <div class="mt-1 text-sm font-medium text-gray-900">{{ "import-export.views.type_import.existing_not_overwritten" | t }}</div>
+        <div class="mt-1 text-xs text-gray-500">{{ "import-export.views.type_import.blocks_before_pages" | t }}</div>
+      </div>
+    </div>
+
+    {% if hasWarnings %}
+      <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div class="font-semibold">{{ "import-export.views.type_import.review_before_applying" | t }}</div>
+        <ul class="mt-1 list-disc space-y-1 pl-5">
+          {% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="mb-6 flex flex-col gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <div class="text-sm font-semibold text-indigo-900">{{ "import-export.views.type_import.create_missing_types" | t }}</div>
+        <p class="mt-1 text-sm text-indigo-800" data-type-import-status>
+          {{ "import-export.views.type_import.bulk_action_description" | t }}
+        </p>
+      </div>
+      <button type="button" data-type-import-apply
+              class="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700">
+        {{ "import-export.views.type_import.apply_missing_types" | t }}
+      </button>
+    </div>
+
+    <div class="space-y-6">
+      <section>
+        <div class="mb-2 flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.page_types" | t }}</h3>
+          <a href="/admin/page_types" class="text-sm text-indigo-600 hover:underline">{{ "import-export.views.type_import.open_page_types" | t }}</a>
+        </div>
+        <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <table class="w-full min-w-[600px] text-left">
+            <thead class="bg-gray-50"><tr>
+              <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.name" | t }}</th>
+              <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.slug" | t }}</th>
+              <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.blocks" | t }}</th>
+              <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.status" | t }}</th>
+            </tr></thead>
+            <tbody class="divide-y divide-gray-100">
+              {% if hasPageTypes %}
+                {% for type in pageTypes %}
+                  <tr data-type-import-row="page:{{ type.slug }}">
+                    <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ type.name }}</td>
+                    <td class="px-4 py-3 font-mono text-sm text-gray-500">{{ type.slug }}</td>
+                    <td class="px-4 py-3 text-sm text-gray-500">{{ type.blockTypes | join: ', ' }}</td>
+                    <td class="px-4 py-3 text-sm" data-type-import-row-status>
+                      {% if type.status == 'existing' %}<span class="text-gray-500">{{ "import-export.views.type_import.existing_unchanged" | t }}</span>{% else %}<span class="text-indigo-700">{{ "import-export.views.type_import.missing_will_create" | t }}</span>{% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="4" class="px-4 py-6 text-sm text-gray-500">{{ "import-export.views.type_import.no_page_types" | t }}</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <div class="mb-2 flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.block_types" | t }}</h3>
+          <a href="/admin/block_types" class="text-sm text-indigo-600 hover:underline">{{ "import-export.views.type_import.open_block_types" | t }}</a>
+        </div>
+        <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <table class="w-full min-w-[500px] text-left">
+            <thead class="bg-gray-50"><tr>
+              <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.name" | t }}</th>
+              <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.slug" | t }}</th>
+              <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.type_import.status" | t }}</th>
+            </tr></thead>
+            <tbody class="divide-y divide-gray-100">
+              {% if hasBlockTypes %}
+                {% for type in blockTypes %}
+                  <tr data-type-import-row="block:{{ type.slug }}">
+                    <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ type.name }}</td>
+                    <td class="px-4 py-3 font-mono text-sm text-gray-500">{{ type.slug }}</td>
+                    <td class="px-4 py-3 text-sm" data-type-import-row-status>
+                      {% if type.status == 'existing' %}<span class="text-gray-500">{{ "import-export.views.type_import.existing_unchanged" | t }}</span>{% else %}<span class="text-indigo-700">{{ "import-export.views.type_import.missing_will_create" | t }}</span>{% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="3" class="px-4 py-6 text-sm text-gray-500">{{ "import-export.views.type_import.no_block_types" | t }}</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <details class="mt-6 rounded-xl border border-gray-200 bg-white p-4">
+      <summary class="cursor-pointer text-sm font-semibold text-gray-700">{{ "import-export.views.type_import.individual_fallback_forms" | t }}</summary>
+      <p class="mt-2 text-sm text-gray-500">{{ "import-export.views.type_import.fallback_description" | t }}</p>
+      <div class="mt-4 space-y-4">
+        {% for type in blockTypes %}
+          {% if type.status != 'existing' %}
+            <form method="post" action="/admin/block_types" class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <input type="hidden" name="name" value="{{ type.name }}">
+              <input type="hidden" name="slug" value="{{ type.slug }}">
+              <input type="hidden" name="blueprint" value="{{ type.blueprintJson }}">
+              <input type="hidden" name="weight" value="5">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span class="font-mono text-sm text-gray-700">{{ type.slug }}</span>
+                <button type="submit" class="inline-flex h-9 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100">{{ "import-export.views.type_import.create_block_type" | t }}</button>
+              </div>
+            </form>
+          {% endif %}
+        {% endfor %}
+        {% for type in pageTypes %}
+          {% if type.status != 'existing' %}
+            <form method="post" action="/admin/page_types" class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <input type="hidden" name="name" value="{{ type.name }}">
+              <input type="hidden" name="slug" value="{{ type.slug }}">
+              <input type="hidden" name="blueprint" value="{{ type.blueprintJson }}">
+              <input type="hidden" name="weight" value="5">
+              {% for block in type.blockTypes %}<input type="hidden" name="block_lists" value="{{ block }}">{% endfor %}
+              {% for taxonomy in type.taxonomyTypes %}<input type="hidden" name="taxonomy_lists" value="{{ taxonomy }}">{% endfor %}
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span class="font-mono text-sm text-gray-700">{{ type.slug }}</span>
+                <button type="submit" class="inline-flex h-9 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-100">{{ "import-export.views.type_import.create_page_type" | t }}</button>
+              </div>
+            </form>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </details>
+
+    <script src="{{ importAssetHref }}" defer></script>
+  {% else %}
+    {% if hasImportError %}
+      <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{ importError }}</div>
+    {% endif %}
+    <form method="post" action="{{ action }}" enctype="multipart/form-data" class="min-w-0 max-w-3xl space-y-4">
+      <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+        {{ "import-export.views.type_import.upload_description" | t }}
+      </div>
+      <label class="block">
+        <span class="mb-1 block text-sm font-medium text-gray-700">{{ "import-export.views.type_import.type_setup_json" | t }}</span>
+        <input type="file" name="file" accept=".json,application/json"
+               class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700">
+      </label>
+      <label for="json" class="block">
+        <span class="mb-1 block text-sm font-medium text-gray-700">{{ "import-export.views.type_import.or_paste_json" | t }}</span>
+        <textarea id="json" name="json" rows="16"
+                  class="block min-w-0 w-full max-w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"></textarea>
+      </label>
+      <button type="submit"
+              class="inline-flex h-10 items-center justify-center rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700">
+        {{ "import-export.views.type_import.review_type_setup" | t }}
+      </button>
+    </form>
+  {% endif %}
+</div>
