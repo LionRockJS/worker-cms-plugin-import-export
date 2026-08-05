@@ -31,13 +31,3 @@ binding = "CF_VERSION_METADATA"
 # [[kv_namespaces]]
 # binding = "TENANTS"
 # id = "REPLACE_WITH_ID_FROM_npm_run_kv_setup"
-# preview_id = "REPLACE_WITH_ID_FROM_npm_run_kv_setup_preview"
-
-# The CMS forwards this secret on every admin call, and this plugin sends it
-# back on every Plugin API call. Set it to THIS plugin's dedicated secret —
-# shown in the CMS admin under Plugins → (this plugin) → Edit → Shared secret:
-#   wrangler secret put PLUGIN_SECRET
-#
-# Local dev (.dev.vars):
-#   CMS_URL=http://localhost:8787
-#   PLUGIN_SECRET=<must match the host CMS's .dev.vars PLUGIN_SECRET>
