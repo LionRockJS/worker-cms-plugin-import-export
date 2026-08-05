@@ -14,13 +14,13 @@
     "tenant:add": "node scripts/add-tenant.mjs"
   },
   "dependencies": {
-    "@lionrockjs/worker-cms-plugin": "0.3.3"
+    "@lionrockjs/worker-cms-plugin": "0.3.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260729.1",
+    "@cloudflare/workers-types": "^5.20260804.1",
     "@types/node": "^26.1.2",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10",
-    "wrangler": "^4.115.0"
+    "wrangler": "^4.118.0"
   }
 }
