@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "npm run typecheck",
     "dev": "wrangler dev --port 8786",
     "deploy": "wrangler deploy",
     "test": "vitest run",
