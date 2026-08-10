@@ -14,7 +14,7 @@
     "kv:list": "wrangler kv key list --binding TENANTS --remote --prefix tenant:"
   },
   "dependencies": {
-    "@lionrockjs/worker-cms-plugin": "0.3.4"
+    "@lionrockjs/worker-cms-plugin": "0.3.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260804.1",

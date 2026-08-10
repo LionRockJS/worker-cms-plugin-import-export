@@ -11,7 +11,14 @@
 // plugin can export and import every page type on the site.
 // ============================================================
 
-import { requireTenant, serveViewAsset, tenantClientEnv, type TenantRegistryEnv } from '@lionrockjs/worker-cms-plugin';
+import {
+  handleTenantEnroll,
+  handleTenantRevoke,
+  requireTenant,
+  serveViewAsset,
+  tenantClientEnv,
+  type TenantRegistryEnv,
+} from '@lionrockjs/worker-cms-plugin';
 import { handleAdmin, type AdminEnv } from './admin';
 import MANIFEST from './manifest.json';
 
@@ -23,6 +30,13 @@ export default {
   async fetch(request: Request, env: PluginEnv): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
+
+    if (path === '/__plugin/tenants/enroll') {
+      return handleTenantEnroll(request, env, { pluginId: MANIFEST.id });
+    }
+    if (path === '/__plugin/tenants/revoke') {
+      return handleTenantRevoke(request, env);
+    }
 
     if (path === '/__plugin/manifest') {
       return Response.json({

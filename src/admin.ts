@@ -222,7 +222,9 @@ async function importTypeSetupPreview(cms: CmsClient, env: AdminEnv, request: Re
     kind: 'page',
     slug: type.page_type,
     name: type.name,
-    status: existingPageTypes.has(type.page_type) ? 'existing' : 'create',
+    status: existingPageTypes.has(type.page_type)
+      ? 'existing'
+      : isTypeAdminCreatableSlug(type.page_type) ? 'create' : 'skip',
     blueprintJson: JSON.stringify(type.blueprint),
     blockTypes: type.block_types,
     taxonomyTypes: type.taxonomy_types,
@@ -233,7 +235,9 @@ async function importTypeSetupPreview(cms: CmsClient, env: AdminEnv, request: Re
     name: type.name,
     // Older hosts do not return block slugs in content-meta, so the browser
     // bulk importer refreshes /admin/block_types before deciding to create.
-    status: existingBlockTypes.has(type.block_type) ? 'existing' : 'create',
+    status: existingBlockTypes.has(type.block_type)
+      ? 'existing'
+      : isTypeAdminCreatableSlug(type.block_type) ? 'create' : 'skip',
     blueprintJson: JSON.stringify(type.blueprint),
   }));
   const warnings = [
@@ -258,6 +262,11 @@ async function importTypeSetupPreview(cms: CmsClient, env: AdminEnv, request: Re
     hasBlockTypes: blockTypes.length > 0,
     importAssetHref: `${BASE}/assets/type-import.js`,
   });
+}
+
+/** The native type-admin form slugifies underscores into hyphens. */
+function isTypeAdminCreatableSlug(slug: string): boolean {
+  return !slug.includes('_');
 }
 
 /** Do not write taxonomy rows here; only keep page selections that exist on the destination. */

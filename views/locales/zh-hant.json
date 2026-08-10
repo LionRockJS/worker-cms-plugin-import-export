@@ -146,11 +146,13 @@
         "preview_payload_error": "無法讀取預覽內容。請重新上傳類型設定檔案。",
         "creating": "正在建立…",
         "created": "已建立",
+        "skipped_underscored": "已略過 — 請在所屬外掛／設定中建立",
         "read_error": "無法讀取{kind}清單（{status}）。",
         "create_error": "CMS 拒絕建立{kind}「{slug}」（{status}）。",
         "not_created_error": "CMS 沒有建立{kind}「{slug}」。請檢查類型管理權限和藍圖。",
         "missing_blocks_error": "無法建立頁面類型「{slug}」：缺少區塊類型 {blocks}。",
         "applied": "類型設定已套用。現有定義保持不變；現在可以匯入 CSV 頁面。",
+        "applied_with_skips": "類型設定已套用。現有定義保持不變；由於 CMS 會正規化底線，已略過 {count} 個含底線的類型。",
         "apply_error": "無法套用類型設定。"
       }
     }

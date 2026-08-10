@@ -47,8 +47,8 @@ also available on the review screen if the asset has not been approved yet.
 ## Setup
 
 1. Deploy: `npm install && npm run deploy`, then `wrangler secret put PLUGIN_SECRET`.
-2. Register in the CMS admin (Plugins → Register) with the Worker URL and the same
-   secret.
+2. Register the Worker HTTPS URL in the CMS admin (**Plugins → Register**) and
+   configure this plugin's dedicated shared secret.
 3. **Approve the wildcard page-type access**: Plugins → import-export → Page types →
    approve `*` for read and write. Without this every call returns
    `forbidden_page_type`.
@@ -61,9 +61,11 @@ also available on the review screen if the asset has not been approved yet.
 Access: admins always; other roles need the `content:import` permission (declared in
 the manifest, granted per role in the CMS admin).
 
-Local dev: copy `.dev.vars.example` to `.dev.vars`; `PLUGIN_SECRET` must match the host
-CMS's `.dev.vars` value, and the host needs the service binding + `PLUGINS` entry (see
-the host README).
+Local dev: copy `.dev.vars.example` to `.dev.vars`; `PLUGIN_SECRET` must match
+this plugin's registered secret. The manifest is `trusted-ui` + `autoTenant`,
+so a deployed CMS Connect action enrolls the Worker into `TENANTS` KV. The
+`CMS_URL` + `PLUGIN_SECRET` variables remain a single-tenant fallback; no host
+service binding or `PLUGINS` list is required for URL transport.
 
 ### Multi-tenant (one Worker, several CMS hosts)
 

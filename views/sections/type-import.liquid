@@ -4,6 +4,8 @@
      data-type-import-creating="{{ "import-export.views.type_import.creating" | t }}"
      data-type-import-created="{{ "import-export.views.type_import.created" | t }}"
      data-type-import-existing="{{ "import-export.views.type_import.existing_unchanged" | t }}"
+     data-type-import-skipped="{{ "import-export.views.type_import.skipped_underscored" | t }}"
+     data-type-import-applied-with-skips="{{ "import-export.views.type_import.applied_with_skips" | t }}"
      data-type-import-read-error="{{ "import-export.views.type_import.read_error" | t }}"
      data-type-import-create-error="{{ "import-export.views.type_import.create_error" | t }}"
      data-type-import-not-created-error="{{ "import-export.views.type_import.not_created_error" | t }}"
@@ -84,7 +86,7 @@
                     <td class="px-4 py-3 font-mono text-sm text-gray-500">{{ type.slug }}</td>
                     <td class="px-4 py-3 text-sm text-gray-500">{{ type.blockTypes | join: ', ' }}</td>
                     <td class="px-4 py-3 text-sm" data-type-import-row-status>
-                      {% if type.status == 'existing' %}<span class="text-gray-500">{{ "import-export.views.type_import.existing_unchanged" | t }}</span>{% else %}<span class="text-indigo-700">{{ "import-export.views.type_import.missing_will_create" | t }}</span>{% endif %}
+                      {% if type.status == 'existing' %}<span class="text-gray-500">{{ "import-export.views.type_import.existing_unchanged" | t }}</span>{% elsif type.status == 'skip' %}<span class="text-amber-700">{{ "import-export.views.type_import.skipped_underscored" | t }}</span>{% else %}<span class="text-indigo-700">{{ "import-export.views.type_import.missing_will_create" | t }}</span>{% endif %}
                     </td>
                   </tr>
                 {% endfor %}
@@ -115,7 +117,7 @@
                     <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ type.name }}</td>
                     <td class="px-4 py-3 font-mono text-sm text-gray-500">{{ type.slug }}</td>
                     <td class="px-4 py-3 text-sm" data-type-import-row-status>
-                      {% if type.status == 'existing' %}<span class="text-gray-500">{{ "import-export.views.type_import.existing_unchanged" | t }}</span>{% else %}<span class="text-indigo-700">{{ "import-export.views.type_import.missing_will_create" | t }}</span>{% endif %}
+                      {% if type.status == 'existing' %}<span class="text-gray-500">{{ "import-export.views.type_import.existing_unchanged" | t }}</span>{% elsif type.status == 'skip' %}<span class="text-amber-700">{{ "import-export.views.type_import.skipped_underscored" | t }}</span>{% else %}<span class="text-indigo-700">{{ "import-export.views.type_import.missing_will_create" | t }}</span>{% endif %}
                     </td>
                   </tr>
                 {% endfor %}
@@ -133,7 +135,7 @@
       <p class="mt-2 text-sm text-gray-500">{{ "import-export.views.type_import.fallback_description" | t }}</p>
       <div class="mt-4 space-y-4">
         {% for type in blockTypes %}
-          {% if type.status != 'existing' %}
+          {% if type.status == 'create' %}
             <form method="post" action="/admin/block_types" class="rounded-lg border border-gray-200 bg-gray-50 p-3">
               <input type="hidden" name="name" value="{{ type.name }}">
               <input type="hidden" name="slug" value="{{ type.slug }}">
@@ -147,7 +149,7 @@
           {% endif %}
         {% endfor %}
         {% for type in pageTypes %}
-          {% if type.status != 'existing' %}
+          {% if type.status == 'create' %}
             <form method="post" action="/admin/page_types" class="rounded-lg border border-gray-200 bg-gray-50 p-3">
               <input type="hidden" name="name" value="{{ type.name }}">
               <input type="hidden" name="slug" value="{{ type.slug }}">

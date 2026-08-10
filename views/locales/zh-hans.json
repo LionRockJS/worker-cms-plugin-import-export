@@ -146,11 +146,13 @@
         "preview_payload_error": "无法读取预览内容。请重新上传类型设置文件。",
         "creating": "正在创建…",
         "created": "已创建",
+        "skipped_underscored": "已跳过 — 请在所属插件/配置中创建",
         "read_error": "无法读取{kind}清单（{status}）。",
         "create_error": "CMS 拒绝创建{kind}“{slug}”（{status}）。",
         "not_created_error": "CMS 没有创建{kind}“{slug}”。请检查类型管理权限和蓝图。",
         "missing_blocks_error": "无法创建页面类型“{slug}”：缺少区块类型 {blocks}。",
         "applied": "类型设置已应用。现有定义保持不变；现在可以导入 CSV 页面。",
+        "applied_with_skips": "类型设置已应用。现有定义保持不变；由于 CMS 会规范化下划线，已跳过 {count} 个含下划线的类型。",
         "apply_error": "无法应用类型设置。"
       }
     }

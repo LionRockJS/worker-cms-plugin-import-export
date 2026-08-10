@@ -29,6 +29,17 @@
       : message('typeImportPageType', 'page type');
   }
 
+  // The native CMS type-admin form normalizes underscores to hyphens. Do not
+  // create a different type under a changed slug; those definitions belong to
+  // the owning plugin/config and should remain untouched by this importer.
+  function isSkippedSlug(slug) {
+    return String(slug || '').includes('_');
+  }
+
+  function markSkipped(kind, slug) {
+    setRowStatus(kind, slug, message('typeImportSkipped', 'Skipped — create in the owning plugin/config'), 'text-amber-700');
+  }
+
   function setRowStatus(kind, slug, text, className) {
     const row = [...root.querySelectorAll('[data-type-import-row]')]
       .find((entry) => entry.getAttribute('data-type-import-row') === `${kind}:${slug}`);
@@ -40,7 +51,11 @@
 
   async function typeSlugs(kind) {
     const base = kind === 'block' ? '/admin/block_types' : '/admin/page_types';
-    const response = await fetch(base, {
+    // The list is read immediately after a native type-admin POST. Explicitly
+    // bypass the browser cache because a stale list makes a successful create
+    // look like a failed one.
+    const response = await fetch(`${base}?_type_import_refresh=${Date.now()}`, {
+      cache: 'no-store',
       credentials: 'same-origin',
       headers: { Accept: 'text/html' },
     });
@@ -52,6 +67,27 @@
     }
 
     const document = new DOMParser().parseFromString(await response.text(), 'text/html');
+
+    // Current CMS admin pages are client-rendered: the response contains a
+    // loading shell and the actual list in cms-render-payload. Scraping the
+    // response's table therefore returns no rows even though the rendered
+    // page visibly lists existing types.
+    const payload = document.querySelector('#cms-render-payload');
+    if (payload?.textContent) {
+      try {
+        const parsed = JSON.parse(payload.textContent);
+        const types = parsed?.bodyView?.data?.types;
+        if (Array.isArray(types)) {
+          return new Set(types
+            .map((type) => type && typeof type.slug === 'string' ? type.slug.trim() : '')
+            .filter(Boolean));
+        }
+      } catch {
+        // Fall through to the legacy rendered-table parser below.
+      }
+    }
+
+    // Older/full-document hosts render the table directly in the response.
     const slugs = new Set();
     document.querySelectorAll('table tbody tr').forEach((row) => {
       const cells = row.querySelectorAll('td');
@@ -91,8 +127,9 @@
       }));
     }
 
-    // The host's CRUD route returns an HTML validation page on form errors and
-    // redirects on success. Re-read the list so both cases are unambiguous.
+    // The native route follows a successful redirect to a 200 page, while a
+    // validation failure is also 200. Verify both against a fresh shell
+    // payload so only a real type-list entry counts as success.
     const slugs = await typeSlugs(kind);
     if (!slugs.has(slug)) {
       throw new Error(format('typeImportNotCreatedError', 'The CMS did not create {kind} “{slug}”. Check its type-admin permissions and blueprint.', {
@@ -119,11 +156,17 @@
     }
 
     try {
+      let skippedTypes = 0;
       let blockSlugs = await typeSlugs('block');
       for (const type of setup.block_types || []) {
         const slug = type.block_type;
         if (blockSlugs.has(slug)) {
           setRowStatus('block', slug, message('typeImportExisting', 'Existing — unchanged'), 'text-gray-500');
+          continue;
+        }
+        if (isSkippedSlug(slug)) {
+          markSkipped('block', slug);
+          skippedTypes += 1;
           continue;
         }
         await createType('block', type);
@@ -137,6 +180,11 @@
           setRowStatus('page', slug, message('typeImportExisting', 'Existing — unchanged'), 'text-gray-500');
           continue;
         }
+        if (isSkippedSlug(slug)) {
+          markSkipped('page', slug);
+          skippedTypes += 1;
+          continue;
+        }
         const missingBlocks = (type.block_types || []).filter((block) => !blockSlugs.has(block));
         if (missingBlocks.length > 0) {
           throw new Error(format('typeImportMissingBlocksError', 'Cannot create page type “{slug}”: missing block type(s) {blocks}.', {
@@ -148,7 +196,9 @@
         pageSlugs = await typeSlugs('page');
       }
 
-      summary.textContent = message('typeImportApplied', 'Type setup applied. Existing definitions were left unchanged; you can now import the CSV pages.');
+      summary.textContent = skippedTypes > 0
+        ? format('typeImportAppliedWithSkips', 'Type setup applied. Existing definitions were left unchanged; {count} underscored type(s) were skipped because the CMS normalizes underscores.', { count: skippedTypes })
+        : message('typeImportApplied', 'Type setup applied. Existing definitions were left unchanged; you can now import the CSV pages.');
       summary.className = 'mt-1 text-sm font-medium text-emerald-800';
     } catch (error) {
       summary.textContent = error instanceof Error ? error.message : message('typeImportApplyError', 'The type setup could not be applied.');

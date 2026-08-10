@@ -64,7 +64,11 @@ describe('plugin worker routes', () => {
   it('serves the approved type-import asset', async () => {
     const response = await worker.fetch(new Request('https://plugin.local/assets/type-import.js'), env());
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("/admin/block_types");
+    const script = await response.text();
+    expect(script).toContain("/admin/block_types");
+    expect(script).toContain("cache: 'no-store'");
+    expect(script).toContain("cms-render-payload");
+    expect(script).toContain("bodyView?.data?.types");
 
     const proxied = await worker.fetch(adminRequest('/__plugin/admin/assets/type-import.js'), env());
     expect(proxied.status).toBe(200);
