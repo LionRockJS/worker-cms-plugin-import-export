@@ -143,7 +143,13 @@ export function parseCsv(text: string): string[][] {
       continue;
     }
 
-    if (char === '"') {
+    // csvFormatValue protects numeric-looking cells as Excel string literals
+    // (`="123"`). Treat the leading `=` + quote as CSV syntax so importing an
+    // exported file yields `123`, rather than the unusable value `=123`.
+    if (char === '=' && cell === '' && next === '"') {
+      quoted = true;
+      index++;
+    } else if (char === '"') {
       quoted = true;
     } else if (char === ',') {
       row.push(normalizeCsvCell(cell));
@@ -190,6 +196,15 @@ function hasCsvColumn(row: Record<string, string>, key: string): boolean {
 
 function csvCellHasValue(value: string | null | undefined): boolean {
   return typeof value === 'string' && value.trim() !== '';
+}
+
+const DEFAULT_PAGE_WEIGHT = 5;
+
+/** Returns a finite page weight from a CSV cell, or null when it is absent/invalid. */
+function csvPageWeight(value: string | null | undefined): number | null {
+  if (!csvCellHasValue(value)) return null;
+  const weight = Number(value);
+  return Number.isFinite(weight) ? weight : null;
 }
 
 export function csvRowHasValues(row: Record<string, string>): boolean {
@@ -1135,7 +1150,7 @@ export function prepareCreateFromRow(
 
   const name = row.name?.trim() || localizedName(lect, meta.default_language) || `Untitled ${pageType}`;
   const slug = row.slug?.trim() || slugify(name);
-  const weight = csvCellHasValue(row.weight) && Number.isFinite(Number(row.weight)) ? Number(row.weight) : 5;
+  const weight = csvPageWeight(row.weight) ?? DEFAULT_PAGE_WEIGHT;
 
   return {
     page_type: pageType,
@@ -1214,8 +1229,13 @@ export function prepareUpdateFromRow(
       input.slug = row.slug.trim();
       changed = true;
     }
-    if (csvCellHasValue(row.weight) && (existing.weight === null || existing.weight === undefined)) {
-      input.weight = Number(row.weight);
+    const weight = csvPageWeight(row.weight);
+    // Pages have a non-null database default (5), so checking only for null
+    // means the default import mode can never carry an exported weight onto a
+    // matching destination page. Treat the default as an empty weight, while
+    // preserving a deliberately non-default destination value in append mode.
+    if (weight !== null && (existing.weight === null || existing.weight === undefined || Number(existing.weight) === DEFAULT_PAGE_WEIGHT)) {
+      input.weight = weight;
       changed = true;
     }
     if (csvCellHasValue(row.start) && !existing.start) {
@@ -1239,8 +1259,9 @@ export function prepareUpdateFromRow(
       input.slug = row.slug?.trim() || existing.slug || slugify(input.name ?? existing.name ?? '');
       changed = true;
     }
-    if (hasCsvColumn(row, 'weight') && csvCellHasValue(row.weight)) {
-      input.weight = Number(row.weight);
+    const weight = csvPageWeight(row.weight);
+    if (hasCsvColumn(row, 'weight') && weight !== null) {
+      input.weight = weight;
       changed = true;
     }
     if (hasCsvColumn(row, 'start')) {

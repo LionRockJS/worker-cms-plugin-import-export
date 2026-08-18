@@ -29,17 +29,6 @@
       : message('typeImportPageType', 'page type');
   }
 
-  // The native CMS type-admin form normalizes underscores to hyphens. Do not
-  // create a different type under a changed slug; those definitions belong to
-  // the owning plugin/config and should remain untouched by this importer.
-  function isSkippedSlug(slug) {
-    return String(slug || '').includes('_');
-  }
-
-  function markSkipped(kind, slug) {
-    setRowStatus(kind, slug, message('typeImportSkipped', 'Skipped — create in the owning plugin/config'), 'text-amber-700');
-  }
-
   function setRowStatus(kind, slug, text, className) {
     const row = [...root.querySelectorAll('[data-type-import-row]')]
       .find((entry) => entry.getAttribute('data-type-import-row') === `${kind}:${slug}`);
@@ -156,17 +145,11 @@
     }
 
     try {
-      let skippedTypes = 0;
       let blockSlugs = await typeSlugs('block');
       for (const type of setup.block_types || []) {
         const slug = type.block_type;
         if (blockSlugs.has(slug)) {
           setRowStatus('block', slug, message('typeImportExisting', 'Existing — unchanged'), 'text-gray-500');
-          continue;
-        }
-        if (isSkippedSlug(slug)) {
-          markSkipped('block', slug);
-          skippedTypes += 1;
           continue;
         }
         await createType('block', type);
@@ -180,11 +163,6 @@
           setRowStatus('page', slug, message('typeImportExisting', 'Existing — unchanged'), 'text-gray-500');
           continue;
         }
-        if (isSkippedSlug(slug)) {
-          markSkipped('page', slug);
-          skippedTypes += 1;
-          continue;
-        }
         const missingBlocks = (type.block_types || []).filter((block) => !blockSlugs.has(block));
         if (missingBlocks.length > 0) {
           throw new Error(format('typeImportMissingBlocksError', 'Cannot create page type “{slug}”: missing block type(s) {blocks}.', {
@@ -196,9 +174,7 @@
         pageSlugs = await typeSlugs('page');
       }
 
-      summary.textContent = skippedTypes > 0
-        ? format('typeImportAppliedWithSkips', 'Type setup applied. Existing definitions were left unchanged; {count} underscored type(s) were skipped because the CMS normalizes underscores.', { count: skippedTypes })
-        : message('typeImportApplied', 'Type setup applied. Existing definitions were left unchanged; you can now import the CSV pages.');
+      summary.textContent = message('typeImportApplied', 'Type setup applied. Existing definitions were left unchanged; you can now import the CSV pages.');
       summary.className = 'mt-1 text-sm font-medium text-emerald-800';
     } catch (error) {
       summary.textContent = error instanceof Error ? error.message : message('typeImportApplyError', 'The type setup could not be applied.');

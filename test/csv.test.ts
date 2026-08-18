@@ -62,6 +62,13 @@ describe('CSV parsing and formatting (ported from the host)', () => {
     expect(rows[2]).toEqual(['Quote "x"']);
   });
 
+  it('round-trips Excel string literals used to protect numeric CSV cells', () => {
+    expect(parseCsv('id,weight\n="0007",="3"')).toEqual([
+      ['id', 'weight'],
+      ['0007', '3'],
+    ]);
+  });
+
   it('maps rows to objects keyed by header', () => {
     expect(csvRowsToObjects([['name', 'slug'], ['About', 'about']])).toEqual([{ name: 'About', slug: 'about' }]);
   });
@@ -112,6 +119,7 @@ describe('export', () => {
   it('builds a CSV with blueprint, data-discovered and tag columns', () => {
     const pages = [
       page({
+        weight: 3,
         lect: {
           name: { en: 'One' },
           status: 'live',
@@ -128,6 +136,7 @@ describe('export', () => {
     expect(headers).toContain('tag:Topic');
     expect(row[headers.indexOf('name.en')]).toBe('One');
     expect(row[headers.indexOf('status')]).toBe('live');
+    expect(row[headers.indexOf('weight')]).toBe('3');
     expect(row[headers.indexOf('page_type')]).toBe('default');
     expect(row[headers.indexOf('block_type')]).toBe('hero; text');
     expect(row[headers.indexOf('tag:Topic')]).toBe('News');
@@ -291,6 +300,37 @@ describe('import apply', () => {
     const replace = prepareUpdateFromRow(meta, 'default', row, existing, specs, 'replace', new Map());
     expect(replace.changed).toBe(true);
     expect(replace.input.lect).toMatchObject({ status: 'draft', name: { en: 'Renamed' } });
+  });
+
+  it('imports an explicit weight onto a default-weight page in append mode', () => {
+    const existing = page({ id: 7, weight: 5 });
+    const row = { weight: '3' };
+
+    const update = prepareUpdateFromRow(meta, 'default', row, existing, specs, 'append', new Map());
+    expect(update.changed).toBe(true);
+    expect(update.input.weight).toBe(3);
+  });
+
+  it('preserves a non-default weight in append mode but accepts it in replace mode', () => {
+    const existing = page({ id: 7, weight: 9 });
+    const row = { weight: '3' };
+
+    const append = prepareUpdateFromRow(meta, 'default', row, existing, specs, 'append', new Map());
+    expect(append.changed).toBe(false);
+    expect(append.input.weight).toBeUndefined();
+
+    const replace = prepareUpdateFromRow(meta, 'default', row, existing, specs, 'replace', new Map());
+    expect(replace.changed).toBe(true);
+    expect(replace.input.weight).toBe(3);
+  });
+
+  it('does not send an invalid page weight to the CMS', () => {
+    const existing = page({ id: 7, weight: 5 });
+    const row = { weight: 'not-a-number' };
+
+    const update = prepareUpdateFromRow(meta, 'default', row, existing, specs, 'replace', new Map());
+    expect(update.changed).toBe(false);
+    expect(update.input.weight).toBeUndefined();
   });
 
   it('replace mode swaps tags only in taxonomies present in the CSV', () => {

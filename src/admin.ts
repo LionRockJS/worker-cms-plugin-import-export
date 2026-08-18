@@ -224,7 +224,7 @@ async function importTypeSetupPreview(cms: CmsClient, env: AdminEnv, request: Re
     name: type.name,
     status: existingPageTypes.has(type.page_type)
       ? 'existing'
-      : isTypeAdminCreatableSlug(type.page_type) ? 'create' : 'skip',
+      : 'create',
     blueprintJson: JSON.stringify(type.blueprint),
     blockTypes: type.block_types,
     taxonomyTypes: type.taxonomy_types,
@@ -237,7 +237,7 @@ async function importTypeSetupPreview(cms: CmsClient, env: AdminEnv, request: Re
     // bulk importer refreshes /admin/block_types before deciding to create.
     status: existingBlockTypes.has(type.block_type)
       ? 'existing'
-      : isTypeAdminCreatableSlug(type.block_type) ? 'create' : 'skip',
+      : 'create',
     blueprintJson: JSON.stringify(type.blueprint),
   }));
   const warnings = [
@@ -264,11 +264,6 @@ async function importTypeSetupPreview(cms: CmsClient, env: AdminEnv, request: Re
   });
 }
 
-/** The native type-admin form slugifies underscores into hyphens. */
-function isTypeAdminCreatableSlug(slug: string): boolean {
-  return !slug.includes('_');
-}
-
 /** Do not write taxonomy rows here; only keep page selections that exist on the destination. */
 function setupForDestination(setup: ContentTypeSetupExport, meta: ContentMeta): ContentTypeSetupExport {
   const taxonomies = new Set(meta.taxonomies.map((taxonomy) => taxonomy.slug));
@@ -292,11 +287,6 @@ function setupImportWarnings(setup: ContentTypeSetupExport, meta: ContentMeta): 
   }
   if (setup.default_language !== meta.default_language || setup.languages.some((language) => !meta.languages.includes(language))) {
     warnings.push('The destination language configuration differs; type blueprints will be imported, but languages are not changed by this feature.');
-  }
-  const underscored = [...setup.page_types.map((type) => type.page_type), ...setup.block_types.map((type) => type.block_type)]
-    .filter((slug) => slug.includes('_'));
-  if (underscored.length > 0) {
-    warnings.push(`The CMS type form normalizes underscores in new slugs. Existing config/plugin types such as ${underscored.join(', ')} are safe to skip; a missing underscored type may need to be created in its owning plugin or config.`);
   }
   return warnings;
 }

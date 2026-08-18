@@ -146,13 +146,11 @@
         "preview_payload_error": "The preview payload could not be read. Upload the setup file again.",
         "creating": "Creating…",
         "created": "Created",
-        "skipped_underscored": "Skipped — create in the owning plugin/config",
         "read_error": "Could not read {kind} types ({status}).",
         "create_error": "The CMS rejected {kind} “{slug}” ({status}).",
         "not_created_error": "The CMS did not create {kind} “{slug}”. Check its type-admin permissions and blueprint.",
         "missing_blocks_error": "Cannot create page type “{slug}”: missing block type(s) {blocks}.",
         "applied": "Type setup applied. Existing definitions were left unchanged; you can now import the CSV pages.",
-        "applied_with_skips": "Type setup applied. Existing definitions were left unchanged; {count} underscored type(s) were skipped because the CMS normalizes underscores.",
         "apply_error": "The type setup could not be applied."
       }
     }

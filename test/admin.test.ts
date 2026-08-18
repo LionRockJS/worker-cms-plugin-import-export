@@ -69,6 +69,8 @@ describe('plugin worker routes', () => {
     expect(script).toContain("cache: 'no-store'");
     expect(script).toContain("cms-render-payload");
     expect(script).toContain("bodyView?.data?.types");
+    expect(script).not.toContain('isSkippedSlug');
+    expect(script).not.toContain('typeImportAppliedWithSkips');
 
     const proxied = await worker.fetch(adminRequest('/__plugin/admin/assets/type-import.js'), env());
     expect(proxied.status).toBe(200);
