@@ -58,8 +58,15 @@ also available on the review screen if the asset has not been approved yet.
    Import/Export buttons and the advanced-search "Export CSV" button link here
    automatically when the plugin is registered.
 
-Access: admins always; other roles need the `content:import` permission (declared in
-the manifest, granted per role in the CMS admin).
+Access: admins always; other roles need BOTH the CMS-side `plugin:access`
+permission and this plugin's `import-export:use` permission, granted per role in
+the CMS admin.
+
+This plugin previously declared the host's built-in `content:import` as its
+access permission, which meant every editor could reach it — and it holds
+wildcard (`*`) read/write page-type access. The CMS now accepts only permissions
+namespaced to the declaring plugin's own manifest id, so access here is granted
+deliberately rather than inherited from a core permission.
 
 Local dev: copy `.dev.vars.example` to `.dev.vars`; `PLUGIN_SECRET` must match
 this plugin's registered secret. The manifest is `trusted-ui` + `autoTenant`,

@@ -9,7 +9,7 @@
     { "label": "Import / Export", "href": "", "roles": ["admin", "editor"], "group": "settings" }
   ],
   "permissions": [
-    { "value": "content:import", "label": "Import/Export: use CSV and type setup import/export" }
+    { "value": "import-export:use", "label": "Import/Export: use CSV and type setup import/export" }
   ],
   "assets": [
     { "path": "/assets/type-import.js", "label": "Type setup importer" }
