@@ -106,7 +106,13 @@
         "single_type_override": "每列的 page_type 欄位會覆寫此頁面的類型。",
         "csv_file": "CSV 檔案",
         "or_paste_csv": "或貼上 CSV",
-        "review_import": "檢視匯入"
+        "review_import": "檢視匯入",
+        "contact_format": "聯絡人檔案格式",
+        "contact_format_auto": "自動識別（原生或舊版）",
+        "contact_format_legacy": "舊版 Eventuai 聯絡人",
+        "review_field_changes": "檢視欄位變更",
+        "replaces_existing": "僅限取代模式",
+        "adds_missing": "填入空白欄位"
       },
       "type_import": {
         "title": "匯入類型設定",

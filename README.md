@@ -1,11 +1,16 @@
 # worker-cms-plugin-import-export
 
-Generic CSV import / export for Workers CMS, extracted from the host CMS so the core
+CSV and workbook import / export for Workers CMS, extracted from the host CMS so the core
 stays lean. One Worker, no database of its own — page data flows through the host
 Plugin API at `{CMS_URL}/__cms/*`; type setup writes use the destination CMS's
 authenticated type-admin routes.
 
 ## Features
+
+- **Workbook uploads**: CSV, XLSX and XLS imports read every populated sheet, preserving formatted identifiers such as leading-zero contact numbers. Fields absent from a sheet stay untouched during replacement; explicit blank cells follow the selected mode.
+- **Legacy Eventuai contacts**: contact imports automatically recognize legacy columns, with an explicit format selector for ambiguous files. Numbered companies, emails, phones and assistants, multilingual names, biographies, tags and event history map to current contact fields. Unmapped columns are retained under `legacy_import`. Matching uses existing IDs/contact numbers first, then exact source and name (with bio disambiguation); duplicate or ambiguous targets fail before writes. Preview shows changed values and identifies existing values that replacement would overwrite. All six import modes remain available.
+- **vCards**: contact uploads accept UTF-8 vCard files, including folded lines and common names, email, phone, address and organization fields. Convert older quoted-printable/base64 vCards to UTF-8 before uploading.
+- Upload limits: 10 MB per file, 100 sheets, 50,000 rows per workbook and 512 columns per sheet; normalized preview data is capped at 20 MB.
 
 - **Export** any page type (or every type at once) to CSV: one column per blueprint
   field (localized fields expand per language, e.g. `name.en`), columns discovered from

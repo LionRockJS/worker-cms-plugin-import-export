@@ -1,3 +1,6 @@
+import { readImportSheets, sheetObjects, objectsCsv, ImportValidationError, IMPORT_MAX_BYTES } from './import-upload';
+import { legacyContactRow, isLegacyContactRow, matchLegacyContacts, legacyContactChanges } from './legacy-contacts';
+import { vcardRows } from './vcard';
 // ============================================================
 // Admin UI — proxied by the CMS at /admin/plugins/import-export/<rest>.
 //
@@ -109,12 +112,13 @@ export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Pr
     if (segments[0] === 'import' && segments[1]) {
       const pageType = decodeURIComponent(segments[1]);
       if (request.method === 'GET') return importForm(cms, env, pageType);
-      if (request.method === 'POST' && segments[2] === 'confirm') return importConfirm(cms, env, request, pageType);
-      if (request.method === 'POST') return importPreview(cms, env, request, pageType);
+      if (request.method === 'POST' && segments[2] === 'confirm') return await importConfirm(cms, env, request, pageType);
+      if (request.method === 'POST') return await importPreview(cms, env, request, pageType);
     }
 
     return notFoundView(env.VIEWS);
   } catch (error) {
+    if (error instanceof ImportValidationError) return adminView(env.VIEWS, 'Import needs attention', 'error', { heading: 'Import needs attention', message: error.message });
     if (error instanceof CmsApiError) {
       return adminView(env.VIEWS, 'Import / Export', 'error', {
         heading: 'CMS request failed',
@@ -392,6 +396,7 @@ async function importForm(cms: CmsClient, env: AdminEnv, pageType: string): Prom
     pageType: scope.label,
     isConfirmImport: false,
     isAllTypes: scope.isAll,
+    legacyContacts: pageType === 'contact',
     action: `${BASE}/import/${encodeURIComponent(pageType)}`,
     backHref: scope.backHref,
     sampleCsvHeader: exportHeaders(sampleColumns, meta.taxonomies).join(','),
@@ -418,8 +423,13 @@ async function classifyEntries(
   const targets = new Map<number, CmsPage>();
   if (!skipMatching) {
     for (const [type, group] of groupEntriesByType(entries)) {
-      const existing = await lookupTargets(cms, type, group);
-      for (const [rowNumber, page] of matchImportTargets(group, existing)) targets.set(rowNumber, page);
+      const legacy = type === 'contact' ? group.filter(entry => entry.row._eventuai_contact === '1') : [];
+      const native = group.filter(entry => type !== 'contact' || entry.row._eventuai_contact !== '1');
+      if (native.length) for (const [rowNumber, page] of matchImportTargets(native, await lookupTargets(cms, type, native))) targets.set(rowNumber, page);
+      if (legacy.length) {
+        const existing = await cms.listAll('contact', { includeTags: true });
+        for (const [rowNumber, page] of matchLegacyContacts(legacy, existing, meta)) targets.set(rowNumber, page);
+      }
     }
   }
   return { entries, targets, skippedEmpty, skippedUnknownType };
@@ -428,19 +438,30 @@ async function classifyEntries(
 async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pageType: string): Promise<Response> {
   const form = await request.formData();
   const file = form.get('file');
+  const meta = await cms.meta('all');
   let csvText = typeof form.get('csv') === 'string' ? String(form.get('csv')) : '';
   if (file && typeof file === 'object' && 'text' in file && (file as File).size > 0) {
-    csvText = await (file as File).text();
+    if ((file as File).size > IMPORT_MAX_BYTES) throw new ImportValidationError('The import file exceeds 10 MB.');
+    const rows = /\.vcf$/i.test((file as File).name)
+      ? (pageType === 'contact' ? vcardRows(await (file as File).text()) : (() => { throw new ImportValidationError('Choose the contact import page for vCard files.'); })())
+      : (await readImportSheets(file as File)).flatMap(sheet => sheetObjects(sheet, value => value.replace(/^\uFEFF/, '').trim()));
+    const converted = convertContactRows(rows, pageType, meta, form.get('import_format') === 'eventuai-contact' || /\.vcf$/i.test((file as File).name));
+    csvText = objectsCsv(converted.map(row => ({ ...row, _import_columns: JSON.stringify(Object.keys(row)) })));
   }
   if (!csvText.trim()) {
     return redirect(`${BASE}/import/${encodeURIComponent(pageType)}`);
   }
 
   const scope = importScope(pageType);
-  const meta = await cms.meta('all');
-  const rows = csvRowsToObjects(parseCsv(csvText));
+  const rows = convertContactRows(importRows(csvText), pageType, meta, form.get('import_format') === 'eventuai-contact');
   const { entries, targets, skippedEmpty, skippedUnknownType } = await classifyEntries(cms, meta, rows, pageType);
-  const previewRows = previewImportRows(meta, entries, targets);
+  csvText = objectsCsv(rows.map(row => ({ ...row, _import_columns: JSON.stringify(Object.keys(row)) })));
+  const rowsByNumber = new Map(entries.map(entry => [entry.rowNumber, entry.row]));
+  const previewRows = previewImportRows(meta, entries, targets).map(preview => {
+    const row = rowsByNumber.get(preview.rowNumber);
+    const existing = targets.get(preview.rowNumber);
+    return { ...preview, changes: row?._eventuai_contact === '1' && existing ? legacyContactChanges(row, existing, meta.default_language) : [] };
+  });
   const newRows = previewRows.filter((row) => row.action === 'create');
   const existingRows = previewRows.filter((row) => row.action === 'update');
   const typeCount = new Set(entries.map((entry) => entry.pageType)).size;
@@ -498,7 +519,7 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
 
   const scope = importScope(pageType);
   const meta = await cms.meta('all');
-  const rows = csvRowsToObjects(parseCsv(csvText));
+  const rows = convertContactRows(importRows(csvText), pageType, meta);
   let writes = 0;
 
   // `offset` counts importable entries already applied by earlier passes;
@@ -609,3 +630,21 @@ function parsedCount(value: unknown): number {
 }
 
 export type { ContentMeta, CsvImportMode };
+
+function importRows(csv: string): Array<Record<string, string>> {
+  return csvRowsToObjects(parseCsv(csv)).map(row => {
+    if (!row._import_columns) return row;
+    let columns: unknown;
+    try { columns = JSON.parse(row._import_columns); } catch { throw new ImportValidationError('Invalid import column metadata.'); }
+    if (!Array.isArray(columns) || !columns.every(key => typeof key === 'string')) throw new ImportValidationError('Invalid import column metadata.');
+    return Object.fromEntries((columns as string[]).filter(key => key !== '_import_columns' && key in row).map(key => [key, row[key]]));
+  });
+}
+function convertContactRows(rows: Array<Record<string, string>>, fallback: string, meta: ContentMeta, force = false): Array<Record<string, string>> {
+  return rows.map(row => {
+    const type = row.page_type || fallback;
+    const converted = type === 'contact' && row._eventuai_contact !== '1' && (force || isLegacyContactRow(row)) ? legacyContactRow(row, meta.default_language) : row;
+    for (const [key, value] of Object.entries(converted)) if (value && key.startsWith('tag:') && converted._eventuai_contact === '1' && !meta.taxonomies.some(taxonomy => taxonomy.name === key.slice(4))) throw new ImportValidationError(`Configure the “${key.slice(4)}” taxonomy before importing these contact tags.`);
+    return converted;
+  });
+}

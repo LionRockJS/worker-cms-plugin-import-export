@@ -1,3 +1,4 @@
+import { ImportValidationError } from './import-upload';
 // ============================================================
 // CSV parsing, export formatting, and import classify/apply logic.
 //
@@ -255,7 +256,7 @@ export function csvImportPathSpecs(
   const seen = new Set(specs.map((spec) => spec.header));
   const reserved = new Set([
     'id', 'uuid', 'name', 'slug', 'weight', 'start', 'end', 'timezone',
-    'page_type', 'block_type',
+    'page_type', 'block_type', '_eventuai_contact', '_import_columns',
   ]);
 
   for (const rawHeader of headers) {
@@ -374,8 +375,8 @@ function lectValueToCsvCell(value: unknown, defaultLanguage: string): string {
 
 function getPathValue(source: unknown, path: string): unknown {
   let current: unknown = source;
-  for (const segment of path.split('.').filter(Boolean)) {
-    if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined;
+  for (const segment of path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean)) {
+    if (!current || typeof current !== 'object') return undefined;
     current = (current as Record<string, unknown>)[segment];
   }
   return current;
@@ -410,6 +411,18 @@ function ensureRecordPath(source: Record<string, unknown>, path: string): Record
 }
 
 export function setLectPathValue(lect: Lect, path: string, kind: BlueprintPathKind, value: string, language: string): void {
+  if (path.split(/[.\[\]]/).some(segment => ['__proto__', 'constructor', 'prototype'].includes(segment))) throw new ImportValidationError('Unsafe import field path.');
+  const indexed = path.match(/^([^.[\]]+)\[(\d+)\]\.(.+)$/);
+  if (indexed) {
+    const [, itemName, rawIndex, child] = indexed;
+    const index = Number(rawIndex);
+    if (index > 1000) throw new ImportValidationError('An import item index exceeds 1000.');
+    if (!Array.isArray(lect[itemName])) lect[itemName] = [];
+    const rows = lect[itemName] as LectItem[];
+    rows[index] ||= {};
+    setLectPathValue(rows[index], child, kind, value, language);
+    return;
+  }
   const wildcardMatch = path.match(/^(.+?)\[\*\]\.(.+)$/);
   if (wildcardMatch) {
     const [itemName, childPathValue] = [wildcardMatch[1], wildcardMatch[2]];
@@ -1218,6 +1231,7 @@ export function prepareUpdateFromRow(
 
   const input: PreparedUpdate['input'] = {};
   let changed = lectChanged;
+  if (lectChanged && JSON.stringify(lect) === JSON.stringify(existing.lect || {})) { lectChanged = false; changed = false; }
   if (lectChanged) input.lect = lect;
 
   if (mode === 'append') {

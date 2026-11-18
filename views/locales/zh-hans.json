@@ -106,7 +106,13 @@
         "single_type_override": "每行的 page_type 栏位会覆盖此页面的类型。",
         "csv_file": "CSV 文件",
         "or_paste_csv": "或贴上 CSV",
-        "review_import": "检视导入"
+        "review_import": "检视导入",
+        "contact_format": "联系人文件格式",
+        "contact_format_auto": "自动识别（原生或旧版）",
+        "contact_format_legacy": "旧版 Eventuai 联系人",
+        "review_field_changes": "查看字段变更",
+        "replaces_existing": "仅限替换模式",
+        "adds_missing": "填入空白字段"
       },
       "type_import": {
         "title": "导入类型设置",

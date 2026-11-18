@@ -104,9 +104,15 @@
         "add_blueprint_columns": "add that type’s blueprint columns as needed",
         "missing_unknown_rows_skipped": "Rows with a missing or unknown page_type are skipped.",
         "single_type_override": "A page_type column overrides this page’s type per row.",
-        "csv_file": "CSV File",
+        "csv_file": "CSV / Excel / vCard file",
         "or_paste_csv": "Or Paste CSV",
-        "review_import": "Review Import"
+        "review_import": "Review Import",
+        "contact_format": "Contact file format",
+        "contact_format_auto": "Detect automatically (native or legacy)",
+        "contact_format_legacy": "Legacy Eventuai contacts",
+        "review_field_changes": "Review field changes",
+        "replaces_existing": "replace modes only",
+        "adds_missing": "fills a missing field"
       },
       "type_import": {
         "title": "Import type setup",
