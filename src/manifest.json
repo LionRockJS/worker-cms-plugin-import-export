@@ -12,7 +12,8 @@
     { "value": "import-export:use", "label": "Import/Export: use CSV and type setup import/export" }
   ],
   "assets": [
-    { "path": "/assets/type-import.js", "label": "Type setup importer" }
+    { "path": "/assets/type-import.js", "label": "Type setup importer" },
+    { "path": "/assets/contact-import-drop.js", "label": "Contact import drag and drop" }
   ],
   "contentTypes": {
     "readTypes": ["*"],

@@ -105,6 +105,8 @@
         "missing_unknown_rows_skipped": "page_type 缺失或未知的行会被跳过。",
         "single_type_override": "每行的 page_type 栏位会覆盖此页面的类型。",
         "csv_file": "CSV 文件",
+        "drop_file_hint": "将文件拖放到这里，或在下方选择文件。",
+        "drop_single_file": "请一次仅拖放一个文件。",
         "or_paste_csv": "或贴上 CSV",
         "review_import": "检视导入",
         "contact_format": "联系人文件格式",

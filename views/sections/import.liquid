@@ -168,11 +168,20 @@
           </p>
         {% endif %}
       </div>
-      <label class="block">
-        <span class="mb-1 block text-sm font-medium text-gray-700">{{ "import-export.views.import.csv_file" | t }}</span>
-        <input type="file" name="file" accept=".csv,.xlsx,.xls,.vcf,text/csv"
-               class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700">
-      </label>
+      <div>
+        <label class="block" {% if legacyContacts %}data-import-drop-zone{% endif %}>
+          <span class="mb-1 block text-sm font-medium text-gray-700">{{ "import-export.views.import.csv_file" | t }}</span>
+          {% if legacyContacts %}
+            <span class="mb-2 text-sm text-gray-600" data-import-drop-hint hidden>{{ "import-export.views.import.drop_file_hint" | t }}</span>
+          {% endif %}
+          <input type="file" name="file" accept=".csv,.xlsx,.xls,.vcf,text/csv"
+                 class="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700">
+        </label>
+        {% if legacyContacts %}
+          <div role="status" class="text-sm text-red-700" data-import-drop-status
+               data-single-file-message="{{ "import-export.views.import.drop_single_file" | t }}"></div>
+        {% endif %}
+      </div>
       <label for="csv" class="block">
         <span class="mb-1 block text-sm font-medium text-gray-700">{{ "import-export.views.import.or_paste_csv" | t }}</span>
         <textarea id="csv" name="csv" rows="14"
@@ -186,5 +195,8 @@
         <span class="hidden lg:inline">{{ "import-export.views.import.review_import" | t }}</span>
       </button>
     </form>
+    {% if legacyContacts %}
+      <script src="/admin/plugins/import-export/assets/contact-import-drop.js" defer></script>
+    {% endif %}
   {% endif %}
 </div>

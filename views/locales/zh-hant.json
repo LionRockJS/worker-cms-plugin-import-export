@@ -105,6 +105,8 @@
         "missing_unknown_rows_skipped": "page_type 缺少或未知的資料列會被略過。",
         "single_type_override": "每列的 page_type 欄位會覆寫此頁面的類型。",
         "csv_file": "CSV 檔案",
+        "drop_file_hint": "將檔案拖放到這裡，或在下方選擇檔案。",
+        "drop_single_file": "請一次只拖放一個檔案。",
         "or_paste_csv": "或貼上 CSV",
         "review_import": "檢視匯入",
         "contact_format": "聯絡人檔案格式",

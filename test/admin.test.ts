@@ -49,7 +49,10 @@ describe('plugin worker routes', () => {
 
     const section = await worker.fetch(adminRequest('/__plugin/admin/views/sections/import.liquid'), env());
     expect(section.status).toBe(200);
-    expect(await section.text()).toContain('import-export.views.import.confirm_import');
+    const importSection = await section.text();
+    expect(importSection).toContain('import-export.views.import.confirm_import');
+    expect(importSection).toContain('data-import-drop-zone');
+    expect(importSection).toContain('src="/admin/plugins/import-export/assets/contact-import-drop.js"');
 
     const typeSection = await worker.fetch(adminRequest('/__plugin/admin/views/sections/type-import.liquid'), env());
     expect(typeSection.status).toBe(200);
@@ -75,6 +78,20 @@ describe('plugin worker routes', () => {
     const proxied = await worker.fetch(adminRequest('/__plugin/admin/assets/type-import.js'), env());
     expect(proxied.status).toBe(200);
     expect(proxied.headers.get('content-type')).toContain('text/javascript');
+  });
+
+  it('declares and serves the contact import drop asset for CMS approval', async () => {
+    const manifest = await worker.fetch(new Request('https://plugin.local/__plugin/manifest'), env());
+    expect(await manifest.json()).toMatchObject({
+      assets: expect.arrayContaining([expect.objectContaining({ path: '/assets/contact-import-drop.js' })]),
+    });
+
+    const asset = await worker.fetch(new Request('https://plugin.local/assets/contact-import-drop.js'), env());
+    const proxied = await worker.fetch(adminRequest('/__plugin/admin/assets/contact-import-drop.js'), env());
+    expect(asset.status).toBe(200);
+    expect(proxied.status).toBe(200);
+    expect(proxied.headers.get('content-type')).toContain('text/javascript');
+    expect(await proxied.text()).toBe(await asset.text());
   });
 
   it('rejects admin calls without the plugin secret', async () => {

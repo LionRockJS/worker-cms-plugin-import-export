@@ -105,6 +105,8 @@
         "missing_unknown_rows_skipped": "Rows with a missing or unknown page_type are skipped.",
         "single_type_override": "A page_type column overrides this page’s type per row.",
         "csv_file": "CSV / Excel / vCard file",
+        "drop_file_hint": "Drag and drop a file here, or choose a file below.",
+        "drop_single_file": "Drop one file at a time.",
         "or_paste_csv": "Or Paste CSV",
         "review_import": "Review Import",
         "contact_format": "Contact file format",
