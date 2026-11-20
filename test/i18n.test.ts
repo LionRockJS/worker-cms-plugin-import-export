@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import worker from '../src/index';
+import worker, { importSessions } from './worker';
 
 function flattenMessages(value: unknown, prefix = '', output: Record<string, string> = {}): Record<string, string> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return output;
@@ -63,11 +63,13 @@ describe('import/export UI locale catalog', () => {
         }
       },
     } as unknown as Fetcher;
+    const sessions = importSessions(views);
     for (const [locale, label] of Object.entries(expected)) {
       const response = await worker.fetch(new Request(`https://plugin.local/__plugin/views/locales/${locale}.json`), {
         CMS_URL: 'https://cms.local',
         PLUGIN_SECRET: 'test-secret',
         VIEWS: views,
+        IMPORT_SESSIONS: sessions,
       });
       expect(response.status).toBe(200);
       const body = await response.json() as { plugins?: { 'import-export'?: { nav?: { index?: string } } } };

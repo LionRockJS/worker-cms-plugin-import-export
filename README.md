@@ -1,8 +1,8 @@
 # worker-cms-plugin-import-export
 
 CSV and workbook import / export for Workers CMS, extracted from the host CMS so the core
-stays lean. One Worker, no database of its own — page data flows through the host
-Plugin API at `{CMS_URL}/__cms/*`; type setup writes use the destination CMS's
+stays lean. Page data flows through the host Plugin API at `{CMS_URL}/__cms/*`;
+type setup writes use the destination CMS's
 authenticated type-admin routes.
 
 ## Features
@@ -33,7 +33,9 @@ authenticated type-admin routes.
   (new only, fill blanks, replace fields, force-new, …) — the same semantics the host's
   built-in importer had. Tags are created on demand. Large files apply in budgeted
   passes with a "Continue import" step so a single request never blows the Worker
-  subrequest cap.
+  subrequest cap. Review waits for explicit confirmation. A Durable Object stages
+  the upload for confirmation and continuation, deletes the source when the import
+  completes, and expires idle sessions after an hour.
 - **Multi-type imports**: each row's `page_type` column overrides the import page's
   type — matching, blueprint columns and creation all follow the row's own type, so an
   "Export all page types" file round-trips through "Import all page types". Rows with
@@ -61,8 +63,9 @@ also available on the review screen if the asset has not been approved yet.
    `type-import.js`. The review screen still includes individual native forms if you skip this.
    Approve **Contact import drag and drop** (`contact-import-drop.js`) to enable the drop
    zone on the contact import page. The file picker is available before approval.
-   Approve **Contact import countdown** (`contact-import-auto.js`) to start the first and
-   subsequent contact import batches automatically after a three-second countdown.
+   Approve **Contact import countdown** (`contact-import-auto.js`) to continue later
+   contact import batches automatically after a three-second countdown once the user
+   has confirmed the import.
 5. The sidebar gains an "Import / Export" entry under Settings. The host's per-list
    Import/Export buttons and the advanced-search "Export CSV" button link here
    automatically when the plugin is registered.

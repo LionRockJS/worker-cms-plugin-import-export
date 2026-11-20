@@ -4,7 +4,7 @@
       {% if isConfirmImport %}{{ "import-export.views.import.confirm_import" | t }}{% else %}{{ "import-export.views.common.import" | t }}{% endif %}
       {{ pageType }}
     </h2>
-    <a href="{{ backHref }}" {% if autoImport %}data-stop-continue{% endif %} class="text-sm text-indigo-600 hover:underline">{{ "import-export.views.common.back" | t }}</a>
+    <a href="{{ backHref }}" class="text-sm text-indigo-600 hover:underline">{{ "import-export.views.common.back" | t }}</a>
   </div>
 
   {% if isConfirmImport %}
@@ -29,15 +29,8 @@
       </div>
     {% endif %}
 
-    <form method="POST" action="{{ action }}" class="min-w-0" {% if autoImport %}data-contact-import-auto{% endif %}>
-      <textarea name="csv" class="hidden">{{ csvText }}</textarea>
-
-      {% if autoImport %}
-        <div class="mb-4 text-sm text-gray-700" data-import-countdown hidden>
-          <span role="status" data-import-countdown-message="{{ 'import-export.views.import.auto_countdown' | t }}"></span>
-          <button type="button" class="ml-2 font-semibold text-indigo-600 hover:underline" data-import-pause>{{ "import-export.views.import.pause_auto_import" | t }}</button>
-        </div>
-      {% endif %}
+    <form method="POST" action="{{ action }}" class="min-w-0">
+      <input type="hidden" name="import_id" value="{{ importId }}">
 
       {% if hasImportModeOptions %}
         <fieldset class="mb-6 min-w-0">
@@ -183,9 +176,6 @@
         </button>
       </div>
     </form>
-    {% if autoImport %}
-      <script src="/admin/plugins/import-export/assets/contact-import-auto.js" defer></script>
-    {% endif %}
   {% else %}
     <form method="POST" action="{{ action }}" enctype="multipart/form-data" class="min-w-0 max-w-3xl space-y-4">
       <style>

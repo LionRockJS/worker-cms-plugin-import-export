@@ -43,6 +43,11 @@
         "stop_for_now": "暫時停止"
       },
       "error": {
+        "import_needs_attention": "匯入需要處理",
+        "import_session_expired": "此匯入預覽已過期，請重新上載檔案以預覽。",
+        "import_session_running": "目前批次正在匯入，請等待完成後再試。",
+        "import_session_interrupted": "上一個匯入批次已中斷，部分資料可能已儲存。請先檢查現有頁面，再重新上載。",
+        "import_session_review_required": "請先開啟匯入預覽，再確認匯入。",
         "default_heading": "無法連線至 CMS",
         "not_configured": "尚未設定",
         "not_configured_message": "此外掛 Worker 尚未設定 CMS_URL / PLUGIN_SECRET。",

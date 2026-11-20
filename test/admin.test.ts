@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import worker from '../src/index';
+import worker, { importSessions } from './worker';
 
 const SECRET = 'test-secret';
 
@@ -19,21 +19,32 @@ const views = {
   },
 } as unknown as Fetcher;
 
+const sessions = importSessions(views);
+
 function env() {
-  return { CMS_URL: 'https://cms.local', PLUGIN_SECRET: SECRET, VIEWS: views };
+  return { CMS_URL: 'https://cms.local', PLUGIN_SECRET: SECRET, VIEWS: views, IMPORT_SESSIONS: sessions };
 }
 
-function adminRequest(path: string): Request {
+function adminRequest(path: string, userId = '1'): Request {
   return new Request(`https://plugin.local${path}`, {
-    headers: { 'x-plugin-secret': SECRET, 'x-cms-user': JSON.stringify({ id: '1', role: 'admin' }) },
+    headers: { 'x-plugin-secret': SECRET, 'x-cms-user': JSON.stringify({ id: userId, role: 'admin' }) },
   });
 }
 
-function confirmImport(csv: string, fields: Record<string, string> = {}): Promise<Response> {
-  const request = adminRequest('/__plugin/admin/import/contact/confirm');
+async function reviewContact(csv: string): Promise<string> {
+  const request = adminRequest('/__plugin/admin/import/contact');
+  const response = await worker.fetch(new Request(request, {
+    method: 'POST',
+    body: new URLSearchParams({ csv }),
+  }), env());
+  return (await response.json() as { importId: string }).importId;
+}
+
+function confirmImport(importId: string, fields: Record<string, string> = {}, userId = '1'): Promise<Response> {
+  const request = adminRequest('/__plugin/admin/import/contact/confirm', userId);
   return worker.fetch(new Request(request, {
     method: 'POST',
-    body: new URLSearchParams({ csv, ...fields }),
+    body: new URLSearchParams({ import_id: importId, ...fields }),
   }), env());
 }
 
@@ -67,8 +78,16 @@ describe('plugin worker routes', () => {
     expect(section.status).toBe(200);
     const importSection = await section.text();
     expect(importSection).toContain('import-export.views.import.confirm_import');
+    expect(importSection).toContain('name="import_id"');
+    expect(importSection).not.toContain('data-contact-import-auto');
+    expect(importSection).not.toContain('csvText');
     expect(importSection).toContain('data-import-drop-zone');
     expect(importSection).toContain('src="/admin/plugins/import-export/assets/contact-import-drop.js"');
+
+    const progressSection = await worker.fetch(adminRequest('/__plugin/admin/views/sections/import-progress.liquid'), env());
+    const progressTemplate = await progressSection.text();
+    expect(progressTemplate).toContain('data-contact-import-auto');
+    expect([...progressTemplate.matchAll(/name="([^"]+)"/g)].map(match => match[1])).toEqual(['import_id', 'offset']);
 
     const typeSection = await worker.fetch(adminRequest('/__plugin/admin/views/sections/type-import.liquid'), env());
     expect(typeSection.status).toBe(200);
@@ -136,11 +155,11 @@ describe('plugin worker routes', () => {
 
 describe('import confirmation passes', () => {
   it.each([
-    { pageType: 'contact', csv: 'name\nAda', autoImport: true },
-    { pageType: 'contact', csv: 'page_type,name\ncontact,Ada\narticle,News', autoImport: false },
-    { pageType: 'contact', csv: 'page_type,name\nunknown,Ada', autoImport: false },
-    { pageType: 'article', csv: 'name\nNews', autoImport: false },
-  ])('sets preview auto-import to $autoImport for $pageType and $csv', async ({ pageType, csv, autoImport }) => {
+    { pageType: 'contact', csv: 'name\nAda', hasPreviewRows: true },
+    { pageType: 'contact', csv: 'page_type,name\ncontact,Ada\narticle,News', hasPreviewRows: true },
+    { pageType: 'contact', csv: 'page_type,name\nunknown,Ada', hasPreviewRows: false },
+    { pageType: 'article', csv: 'name\nNews', hasPreviewRows: true },
+  ])('waits for explicit confirmation for $pageType and $csv', async ({ pageType, csv, hasPreviewRows }) => {
     vi.stubGlobal('fetch', async (input: string) => {
       expect(new URL(input).pathname).toBe('/__cms/content-meta');
       return Response.json({ ...contactMeta, page_types: ['contact', 'article'] });
@@ -152,7 +171,40 @@ describe('import confirmation passes', () => {
         body: new URLSearchParams({ csv }),
       }), env());
       expect(response.headers.get('x-cms-view-path')).toBe('/templates/import.json');
-      expect(await response.json()).toMatchObject({ isConfirmImport: true, autoImport });
+      const review = await response.json();
+      expect(review).toMatchObject({ isConfirmImport: true, hasPreviewRows, importId: hasPreviewRows ? expect.any(String) : '' });
+      expect(review).not.toHaveProperty('autoImport');
+      expect(review).not.toHaveProperty('csvText');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('blocks a concurrent or interrupted confirmation from replaying a CMS write', async () => {
+    let signalWrite!: () => void;
+    let rejectWrite!: (error: Error) => void;
+    const writeStarted = new Promise<void>(resolve => { signalWrite = resolve; });
+    const write = new Promise<Response>((_resolve, reject) => { rejectWrite = reject; });
+    const cmsFetch = vi.fn(async (input: string) => {
+      const { pathname } = new URL(input);
+      if (pathname === '/__cms/content-meta') return Response.json(contactMeta);
+      if (pathname !== '/__cms/pages/batch') throw new Error(`Unexpected CMS request ${pathname}`);
+      signalWrite();
+      return write;
+    });
+    vi.stubGlobal('fetch', cmsFetch);
+    try {
+      const importId = await reviewContact('name\nAda');
+      const first = confirmImport(importId, { action: 'force-new' });
+      await writeStarted;
+      const concurrent = await confirmImport(importId, { action: 'force-new' });
+      expect(await concurrent.json()).toMatchObject({ messageKey: 'import-export.views.error.import_session_running' });
+
+      rejectWrite(new DOMException('CMS response was lost', 'TimeoutError'));
+      expect(await (await first).json()).toMatchObject({ messageKey: 'import-export.views.error.import_session_interrupted' });
+      const retry = await confirmImport(importId, { action: 'force-new' });
+      expect(await retry.json()).toMatchObject({ messageKey: 'import-export.views.error.import_session_interrupted' });
+      expect(cmsFetch.mock.calls.filter(([url]) => new URL(url).pathname === '/__cms/pages/batch')).toHaveLength(1);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -180,13 +232,21 @@ describe('import confirmation passes', () => {
       throw new Error(`Unexpected CMS request ${pathname}`);
     });
     try {
-      const first = await confirmImport(csv, { action: 'force-new' });
+      const importId = await reviewContact(csv);
+      const first = await confirmImport(importId, { action: 'force-new' });
       expect(first.headers.get('x-cms-view-path')).toBe('/templates/import-progress.json');
-      expect(await first.json()).toMatchObject({ offset: 100, totalRows: 200, created: 100 });
+      const progress = await first.json();
+      expect(progress).toMatchObject({ importId, offset: 100, totalRows: 200, created: 100, autoImport: true });
+      expect(progress).not.toHaveProperty('csvText');
+      expect(progress).not.toHaveProperty('mode');
       expect(saved).toEqual(names.slice(0, 100));
 
+      expect((await confirmImport(importId, { offset: '100' }, '2')).headers.get('x-cms-view-path')).toBe('/templates/error.json');
+      const replay = await confirmImport(importId, { action: 'force-new' });
+      expect(await replay.json()).toMatchObject({ offset: 100, created: 100 });
       requestStarted = now;
-      const last = await confirmImport(csv, { action: 'force-new', offset: '100', created: '100' });
+      const last = await confirmImport(importId, { offset: '100' });
+      expect((await confirmImport(importId, { offset: '100' })).headers.get('location')).toBe(last.headers.get('location'));
       expect(decodeURIComponent(last.headers.get('location')!)).toContain('200 created, 0 updated, 0 skipped');
       expect(batchSizes).toEqual(Array(8).fill(25));
       expect(saved).toEqual(names);
@@ -220,15 +280,16 @@ describe('import confirmation passes', () => {
       throw new Error(`Unexpected CMS request ${url.pathname}`);
     });
     try {
-      const first = await confirmImport(csv, { action: 'overwrite' });
+      const importId = await reviewContact(csv);
+      const first = await confirmImport(importId, { action: 'overwrite' });
       expect(first.headers.get('x-cms-view-path')).toBe('/templates/import-progress.json');
       expect(await first.json()).toMatchObject({ autoImport: true, offset: 2, totalRows: 4, updated: 2 });
       expect(updated).toEqual(['1', '2']);
 
       requestStarted = now;
-      const last = await confirmImport(csv, { action: 'overwrite', offset: '2', updated: '2' });
+      const last = await confirmImport(importId, { offset: '2' });
       expect(updated).toEqual(['1', '2', '3', '4']);
-      expect(lookups).toEqual(['1,2,3,4', '3,4']);
+      expect(lookups).toEqual(['1,2,3,4', '1,2,3,4', '3,4']);
       expect(decodeURIComponent(last.headers.get('location')!)).toContain('0 created, 4 updated, 0 skipped');
     } finally {
       clock.mockRestore();
@@ -248,13 +309,14 @@ describe('import confirmation passes', () => {
       throw new Error(`Unexpected CMS request ${pathname}`);
     });
     try {
-      const first = await confirmImport(csv, { action: 'force-new' });
+      const importId = await reviewContact(csv);
+      const first = await confirmImport(importId, { action: 'force-new' });
       expect(first.headers.get('x-cms-view-path')).toBe('/templates/import-progress.json');
       expect(await first.json()).toMatchObject({ offset: 100, totalRows: 101, created: 100 });
       expect(requests).not.toContain('/__cms/tags/ensure');
 
       requests.length = 0;
-      const last = await confirmImport(csv, { action: 'force-new', offset: '100', created: '100' });
+      const last = await confirmImport(importId, { offset: '100' });
       expect(requests).toEqual(['/__cms/content-meta', '/__cms/tags/ensure', '/__cms/pages/batch']);
       expect(decodeURIComponent(last.headers.get('location')!)).toContain('101 created, 0 updated, 0 skipped');
     } finally {

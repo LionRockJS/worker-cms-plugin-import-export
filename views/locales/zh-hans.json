@@ -43,6 +43,11 @@
         "stop_for_now": "暂时停止"
       },
       "error": {
+        "import_needs_attention": "导入需要处理",
+        "import_session_expired": "此导入预览已过期，请重新上传文件以预览。",
+        "import_session_running": "当前批次正在导入，请等待完成后再试。",
+        "import_session_interrupted": "上一个导入批次已中断，部分数据可能已保存。请先检查现有页面，再重新上传。",
+        "import_session_review_required": "请先打开导入预览，再确认导入。",
         "default_heading": "无法连接 CMS",
         "not_configured": "尚未配置",
         "not_configured_message": "此插件 Worker 尚未配置 CMS_URL / PLUGIN_SECRET。",

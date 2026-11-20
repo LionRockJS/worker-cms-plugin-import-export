@@ -43,6 +43,11 @@
         "stop_for_now": "Stop for now"
       },
       "error": {
+        "import_needs_attention": "Import needs attention",
+        "import_session_expired": "This import review has expired. Upload the file again to review it.",
+        "import_session_running": "An import pass is already running. Wait for it to finish before retrying.",
+        "import_session_interrupted": "The last import pass was interrupted and may have saved some rows. Review the current pages before uploading again.",
+        "import_session_review_required": "Open the import review before confirming.",
         "default_heading": "Cannot reach the CMS",
         "not_configured": "Not configured",
         "not_configured_message": "CMS_URL / PLUGIN_SECRET are not configured for this plugin Worker.",

@@ -22,6 +22,8 @@ import {
 import { handleAdmin, type AdminEnv } from './admin';
 import MANIFEST from './manifest.json';
 
+export { ImportSession } from './import-session';
+
 interface PluginEnv extends AdminEnv, TenantRegistryEnv {
   CF_VERSION_METADATA?: WorkerVersionMetadata;
 }

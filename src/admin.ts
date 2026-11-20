@@ -17,12 +17,12 @@ import { vcardRows } from './vcard';
 //                                      when a pass stops early, like the events
 //                                      plugin's resumable guest import)
 //
-// Confirmation applies the CSV in passes, using the offset carried in the
-// progress form to resume at the next row.
+// Confirmation applies a staged upload in passes.
 // ============================================================
 
 import { adminView, notFoundView, parseCmsUser, redirect, serveViewAsset } from '@lionrockjs/worker-cms-plugin';
 import { CmsApiError, CmsClient, CREATE_BATCH_SIZE, tagKey, type CmsPage, type ContentMeta, type SearchCriterion } from './cms';
+import type { ImportSession } from './import-session';
 import {
   ALL_PAGE_TYPES,
   buildContentTypeSetupExport,
@@ -54,6 +54,8 @@ import {
 export interface AdminEnv {
   CMS_URL?: string;
   PLUGIN_SECRET?: string;
+  CMS_TENANT_ID?: string;
+  IMPORT_SESSIONS: DurableObjectNamespace<ImportSession>;
   VIEWS: Fetcher;
 }
 
@@ -115,25 +117,41 @@ export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Pr
     if (segments[0] === 'import' && segments[1]) {
       const pageType = decodeURIComponent(segments[1]);
       if (request.method === 'GET') return await importForm(cms, env, pageType);
-      if (request.method === 'POST' && segments[2] === 'confirm') return await importConfirm(cms, env, request, pageType);
-      if (request.method === 'POST') return await importPreview(cms, env, request, pageType);
+      if (request.method === 'POST') {
+        if (!user.id) return new Response('Import requires a signed-in user.', { status: 403 });
+        if (segments[2] === 'confirm') return await importConfirm(env, request, pageType, user.id);
+        return await importPreview(cms, env, request, pageType, user.id);
+      }
     }
 
     return notFoundView(env.VIEWS);
   } catch (error) {
-    if (error instanceof ImportValidationError) return adminView(env.VIEWS, 'Import needs attention', 'error', { heading: 'Import needs attention', message: error.message });
-    if (error instanceof CmsApiError) {
-      const approvalHint = error.code === 'forbidden_page_type'
-        ? ' In Plugins → Import / Export → Page types, approve Read for All page types to load the form and Write to apply imports.'
-        : '';
-      return adminView(env.VIEWS, 'Import / Export', 'error', {
-        heading: 'CMS request failed',
-        headingKey: 'import-export.views.error.cms_request_failed',
-        message: `The CMS responded ${error.status} (${error.code}) on ${error.method} ${error.path}.${approvalHint}`,
-      });
-    }
-    throw error;
+    return importErrorView(env.VIEWS, error);
   }
+}
+
+export function importErrorView(views: Fetcher, error: unknown): Promise<Response> {
+  if (error instanceof ImportValidationError) return adminView(views, 'Import needs attention', 'error', { heading: 'Import needs attention', message: error.message });
+  if (error instanceof CmsApiError) {
+    const approvalHint = error.code === 'forbidden_page_type'
+      ? ' In Plugins → Import / Export → Page types, approve Read for All page types to load the form and Write to apply imports.'
+      : '';
+    return adminView(views, 'Import / Export', 'error', {
+      heading: 'CMS request failed',
+      headingKey: 'import-export.views.error.cms_request_failed',
+      message: `The CMS responded ${error.status} (${error.code}) on ${error.method} ${error.path}.${approvalHint}`,
+    });
+  }
+  throw error;
+}
+
+export function importSessionErrorView(
+  views: Fetcher, reason: 'expired' | 'running' | 'interrupted' | 'review_required',
+): Promise<Response> {
+  return adminView(views, 'Import needs attention', 'error', {
+    headingKey: 'import-export.views.error.import_needs_attention',
+    messageKey: `import-export.views.error.import_session_${reason}`,
+  });
 }
 
 // ── Home ─────────────────────────────────────────────────────────────────────
@@ -435,7 +453,11 @@ function isLegacyContactEntry(entry: CsvRowEntry): boolean {
   return entry.pageType === 'contact' && entry.row._eventuai_contact === '1';
 }
 
-async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pageType: string): Promise<Response> {
+function importSession(env: AdminEnv, userId: string, pageType: string, importId: string) {
+  return env.IMPORT_SESSIONS.getByName(JSON.stringify([env.CMS_TENANT_ID ?? env.CMS_URL, userId, pageType, importId]));
+}
+
+async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pageType: string, userId: string): Promise<Response> {
   const form = await request.formData();
   const file = form.get('file');
   const meta = await cms.meta('all');
@@ -466,17 +488,17 @@ async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pa
   const newRows = previewRows.filter((row) => row.action === 'create');
   const existingRows = previewRows.filter((row) => row.action === 'update');
   const typeCount = new Set(entries.map((entry) => entry.pageType)).size;
+  const importId = previewRows.length ? crypto.randomUUID() : '';
+  if (importId) await importSession(env, userId, pageType, importId).stage(csvText);
 
   return adminView(env.VIEWS, `Confirm import ${scope.label}`, 'import', {
     pageType: scope.label,
     isConfirmImport: true,
-    autoImport: pageType === 'contact' && entries.length > 0 && entries.every(entry => entry.pageType === 'contact'),
     isAllTypes: scope.isAll,
     showTypeColumn: scope.isAll || typeCount > 1,
     action: `${BASE}/import/${encodeURIComponent(pageType)}/confirm`,
     backHref: scope.backHref,
-    csvText,
-    previewRows,
+    importId,
     newRows,
     existingRows,
     hasPreviewRows: previewRows.length > 0,
@@ -505,22 +527,38 @@ async function lookupTargets(cms: CmsClient, pageType: string, entries: CsvRowEn
   return cms.lookup(pageType, [...new Set(ids)], [...new Set(slugs)], { includeTags });
 }
 
-async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pageType: string): Promise<Response> {
-  const deadline = Date.now() + CONFIRM_WORK_MS;
+async function importConfirm(env: AdminEnv, request: Request, pageType: string, userId: string): Promise<Response> {
   const form = await request.formData();
-  const csvText = typeof form.get('csv') === 'string' ? String(form.get('csv')) : '';
-  const mode = csvImportMode(typeof form.get('action') === 'string' ? String(form.get('action')) : '');
-  const offset = parsedCount(form.get('offset'));
-  const carried = {
-    created: parsedCount(form.get('created')),
-    updated: parsedCount(form.get('updated')),
-    skipped: parsedCount(form.get('skipped')),
-  };
-  if (!csvText.trim()) {
-    return redirect(`${BASE}/import/${encodeURIComponent(pageType)}`);
+  const importId = form.get('import_id');
+  if (typeof importId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(importId)) {
+    return importSessionErrorView(env.VIEWS, 'expired');
   }
+  return importSession(env, userId, pageType, importId).confirm({
+    CMS_URL: env.CMS_URL,
+    PLUGIN_SECRET: env.PLUGIN_SECRET,
+    userId,
+    pageType,
+    importId,
+    offset: Number(form.get('offset') ?? 0),
+    mode: csvImportMode(String(form.get('action') ?? '')),
+  });
+}
 
-  const scope = importScope(pageType);
+export interface ImportProgress {
+  offset: number;
+  totalRows: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  autoImport: boolean;
+}
+
+export async function applyImportPass(
+  cms: CmsClient, pageType: string, csvText: string, mode: CsvImportMode,
+  progress: ImportProgress | undefined, beforeWrite: () => Promise<void>,
+): Promise<ImportProgress> {
+  const deadline = Date.now() + CONFIRM_WORK_MS;
+  const offset = progress?.offset ?? 0;
   const meta = await cms.meta('all');
   const rows = convertContactRows(importRows(csvText), pageType, meta);
   let writes = 0;
@@ -535,7 +573,7 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
     ...pass,
     ...entries.slice(passEnd).filter(isLegacyContactEntry),
   ], true);
-  const result = { ...carried };
+  const result = { created: progress?.created ?? 0, updated: progress?.updated ?? 0, skipped: progress?.skipped ?? 0 };
   if (offset === 0) result.skipped += skippedEmpty + skippedUnknownType;
 
   // Re-ensure tags only for the rows eligible to run in this pass.
@@ -546,7 +584,11 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
     }
   }
   const ensuredTags = tagEntries.size
-    ? await (async () => { writes += Math.ceil(tagEntries.size / 200); return cms.ensureTags([...tagEntries.values()]); })()
+    ? await (async () => {
+      await beforeWrite();
+      writes += Math.ceil(tagEntries.size / 200);
+      return cms.ensureTags([...tagEntries.values()]);
+    })()
     : new Map<string, number>();
 
   const csvHeaders = [...new Set(rows.flatMap((row) => Object.keys(row)))];
@@ -565,6 +607,7 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
 
   const flushCreates = async () => {
     if (!pendingCreates.length) return;
+    await beforeWrite();
     const outcome = await cms.batchCreate(pendingCreates);
     writes++;
     result.created += outcome.created.length;
@@ -601,6 +644,7 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
     if (!update.changed) {
       result.skipped++;
     } else {
+      await beforeWrite();
       await cms.update(update.id, update.input);
       writes++;
       result.updated++;
@@ -610,30 +654,28 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
 
   await flushCreates();
 
-  const nextOffset = offset + processed;
-  if (nextOffset < entries.length) {
-    return adminView(env.VIEWS, `Importing ${scope.label}…`, 'import-progress', {
+  return {
+    ...result,
+    offset: offset + processed,
+    totalRows: entries.length,
+    autoImport: pageType === 'contact' && entries.every(entry => entry.pageType === 'contact'),
+  };
+}
+
+export function importProgressView(views: Fetcher, pageType: string, importId: string, progress: ImportProgress): Promise<Response> | Response {
+  const scope = importScope(pageType);
+  if (progress.offset < progress.totalRows) {
+    return adminView(views, `Importing ${scope.label}…`, 'import-progress', {
+      ...progress,
       pageType: scope.label,
-      autoImport: pageType === 'contact' && entries.every(entry => entry.pageType === 'contact'),
       action: `${BASE}/import/${encodeURIComponent(pageType)}/confirm`,
       backHref: scope.backHref,
-      csvText,
-      mode,
-      offset: nextOffset,
-      totalRows: entries.length,
-      created: result.created,
-      updated: result.updated,
-      skipped: result.skipped,
+      importId,
     });
   }
 
-  const flash = `${result.created} created, ${result.updated} updated, ${result.skipped} skipped`;
+  const flash = `${progress.created} created, ${progress.updated} updated, ${progress.skipped} skipped`;
   return redirect(`${scope.backHref}?flash=${encodeURIComponent(flash)}`);
-}
-
-function parsedCount(value: unknown): number {
-  const n = typeof value === 'string' ? parseInt(value, 10) : NaN;
-  return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
 export type { ContentMeta, CsvImportMode };

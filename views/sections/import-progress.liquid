@@ -17,12 +17,8 @@
     </p>
 
     <form method="POST" action="{{ action }}" {% if autoImport %}data-contact-import-auto{% endif %}>
-      <textarea name="csv" class="hidden">{{ csvText }}</textarea>
-      <input type="hidden" name="action" value="{{ mode }}">
+      <input type="hidden" name="import_id" value="{{ importId }}">
       <input type="hidden" name="offset" value="{{ offset }}">
-      <input type="hidden" name="created" value="{{ created }}">
-      <input type="hidden" name="updated" value="{{ updated }}">
-      <input type="hidden" name="skipped" value="{{ skipped }}">
       {% if autoImport %}
         <div class="mb-4 text-sm text-gray-700" data-import-countdown hidden>
           <span role="status" data-import-countdown-message="{{ 'import-export.views.import.auto_countdown' | t }}"></span>

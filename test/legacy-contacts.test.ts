@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { utils, write } from 'xlsx';
-import worker from '../src/index';
+import worker, { importSessions } from './worker';
 import { legacyContactRow, matchLegacyContacts } from '../src/legacy-contacts';
 import { vcardRows } from '../src/vcard';
 import { csvImportPathSpecs, prepareCreateFromRow, prepareUpdateFromRow, setLectPathValue, type Lect } from '../src/csv';
@@ -12,10 +12,11 @@ const meta: ContentMeta = { page_types: ['contact', 'default'], languages: ['en'
 function person(id = 1, lect: Lect = {}): CmsPage {
   return { id, uuid: `person-${id}`, page_type: 'contact', name: 'Ada Lovelace', slug: `person-${id}`, weight: 5, start: null, end: null, timezone: null, page_id: null, created_at: '', updated_at: '', lect, tags: [] };
 }
-const options = { CMS_URL: 'https://cms.test', PLUGIN_SECRET: 'secret', VIEWS: { async fetch(input: RequestInfo | URL) {
+const views = { async fetch(input: RequestInfo | URL) {
   try { return new Response(await readFile(fileURLToPath(new URL(`../views${new URL(String(input)).pathname}`, import.meta.url).href), 'utf8')); } catch { return new Response('not found', { status: 404 }); }
-} } as Fetcher };
-function request(path: string, body: FormData | URLSearchParams) { return new Request(`https://import.test/__plugin/admin/import/contact${path}`, { method: 'POST', headers: { 'x-plugin-secret': 'secret' }, body }); }
+} } as Fetcher;
+const options = { CMS_URL: 'https://cms.test', PLUGIN_SECRET: 'secret', VIEWS: views, IMPORT_SESSIONS: importSessions(views) };
+function request(path: string, body: FormData | URLSearchParams) { return new Request(`https://import.test/__plugin/admin/import/contact${path}`, { method: 'POST', headers: { 'x-plugin-secret': 'secret', 'x-cms-user': '{"id":"1"}' }, body }); }
 function setup(pages: CmsPage[] = []) {
   const writes: Array<{ path: string; body: Record<string, unknown> }> = [];
   let id = 100;
@@ -78,7 +79,11 @@ describe('legacy contact upload workflow', () => {
   it('reimports migrated contacts when the legacy ID no longer resolves', async () => {
     const f = setup();
     const csv = 'contact_id,first_name,last_name,source,email_work_1\n999,Ada,Lovelace,Legacy,ada@example.com\n';
-    const run = () => worker.fetch(request('/confirm', new URLSearchParams({ csv, action: 'new-append' })), options);
+    const run = async () => {
+      const review = await worker.fetch(request('', new URLSearchParams({ csv })), options);
+      const { importId } = await review.json() as { importId: string };
+      return worker.fetch(request('/confirm', new URLSearchParams({ import_id: importId, action: 'new-append' })), options);
+    };
     expect((await run()).status).toBe(302);
     expect(f.pages).toHaveLength(1);
     expect(f.pages[0].id).not.toBe(999);
@@ -92,24 +97,24 @@ describe('legacy contact upload workflow', () => {
     const wb = utils.book_new(); utils.book_append_sheet(wb, utils.aoa_to_sheet([['First Name', 'Last Name', 'Source', 'email_work_2'], ['Ada', 'Lovelace', 'Legacy', 'second@example.com']]), 'Contacts');
     const form = new FormData(); form.set('file', new File([write(wb, { type: 'array', bookType: 'xlsx' })], 'contacts.xlsx'));
     const preview = await worker.fetch(request('', form), options);
-    const data = await preview.json() as { csvText: string; existingCount: number };
+    const data = await preview.json() as { importId: string; existingCount: number };
     expect(data.existingCount).toBe(1); expect(f.writes).toHaveLength(0);
-    const run = () => worker.fetch(request('/confirm', new URLSearchParams({ csv: data.csvText, action: 'new-append' })), options);
+    const run = () => worker.fetch(request('/confirm', new URLSearchParams({ import_id: data.importId, action: 'new-append' })), options);
     expect((await run()).status).toBe(302);
     expect(f.pages).toHaveLength(1); expect(existing.lect).toMatchObject({ position: [{ title: { en: 'Keep title' } }, { email: 'second@example.com' }] });
     const count = f.writes.length; expect((await run()).status).toBe(302); expect(f.writes).toHaveLength(count);
   });
   it('supports vCard uploads through the same preview and confirmation flow', async () => {
     const f = setup(); const form = new FormData(); form.set('file', new File(['BEGIN:VCARD\nVERSION:3.0\nN:Hopper;Grace;;;\nEMAIL:grace@example.com\nEND:VCARD'], 'contacts.vcf'));
-    const response = await worker.fetch(request('', form), options); const data = await response.json() as { csvText: string };
-    expect((await worker.fetch(request('/confirm', new URLSearchParams({ csv: data.csvText })), options)).status).toBe(302);
+    const response = await worker.fetch(request('', form), options); const data = await response.json() as { importId: string };
+    expect((await worker.fetch(request('/confirm', new URLSearchParams({ import_id: data.importId })), options)).status).toBe(302);
     expect(f.pages[0]).toMatchObject({ name: 'Grace Hopper', lect: { email: [{ email: 'grace@example.com' }] } });
   });
   it.each(['new', 'append', 'new-append', 'overwrite', 'new-overwrite', 'force-new'])('preserves existing mode semantics for legacy rows: %s', async mode => {
     const f = setup([person(1, { first_name: { en: 'Ada' }, last_name: { en: 'Lovelace' }, source: 'A', position: [{ email: 'keep@example.com' }] })]);
     const csv = 'first_name,last_name,source,email_work_1\nAda,Lovelace,A,replace@example.com\nGrace,Hopper,A,grace@example.com\n';
-    const preview = await worker.fetch(request('', new URLSearchParams({ csv })), options); const data = await preview.json() as { csvText: string };
-    const response = await worker.fetch(request('/confirm', new URLSearchParams({ csv: data.csvText, action: mode })), options);
+    const preview = await worker.fetch(request('', new URLSearchParams({ csv })), options); const data = await preview.json() as { importId: string };
+    const response = await worker.fetch(request('/confirm', new URLSearchParams({ import_id: data.importId, action: mode })), options);
     expect(response.status).toBe(302);
     expect(f.pages).toHaveLength(mode === 'force-new' ? 3 : ['append', 'overwrite'].includes(mode) ? 1 : 2);
     expect((f.pages[0].lect.position as Array<{ email: string }>)[0].email).toBe(['overwrite', 'new-overwrite'].includes(mode) ? 'replace@example.com' : 'keep@example.com');
@@ -117,7 +122,7 @@ describe('legacy contact upload workflow', () => {
   it('fails validation before tag creation or writes for ambiguous contacts', async () => {
     const a = person(1, { first_name: { en: 'Ada' }, last_name: { en: 'Lovelace' }, source: 'A' });
     const f = setup([a, { ...a, id: 2 }]);
-    const response = await worker.fetch(request('/confirm', new URLSearchParams({ csv: 'first_name,last_name,source,email_work_1,contact_type\nAda,Lovelace,A,new@example.com,VIP\n' })), options);
+    const response = await worker.fetch(request('', new URLSearchParams({ csv: 'first_name,last_name,source,email_work_1,contact_type\nAda,Lovelace,A,new@example.com,VIP\n' })), options);
     expect(JSON.stringify(await response.json())).toContain('multiple contacts'); expect(f.writes).toHaveLength(0);
   });
 });
@@ -128,8 +133,8 @@ it('keeps sheet-specific absent columns distinct from explicit blanks during rep
   utils.book_append_sheet(wb, utils.aoa_to_sheet([['contact_id', 'first_name', 'last_name', 'email_work_1'], ['1', 'Ada', 'Lovelace', '']]), 'Ada');
   utils.book_append_sheet(wb, utils.aoa_to_sheet([['contact_id', 'first_name', 'last_name', 'title_1'], ['2', 'Grace', 'Hopper', 'Admiral']]), 'Grace');
   const form = new FormData(); form.set('file', new File([write(wb, { type: 'array', bookType: 'xlsx' })], 'contacts.xlsx'));
-  const preview = await worker.fetch(request('', form), options); const data = await preview.json() as { csvText: string };
-  expect((await worker.fetch(request('/confirm', new URLSearchParams({ csv: data.csvText, action: 'overwrite' })), options)).status).toBe(302);
+  const preview = await worker.fetch(request('', form), options); const data = await preview.json() as { importId: string };
+  expect((await worker.fetch(request('/confirm', new URLSearchParams({ import_id: data.importId, action: 'overwrite' })), options)).status).toBe(302);
   expect(f.pages[0].lect).toMatchObject({ position: [{ email: '', title: { en: 'Preserve title' } }] });
   expect(f.pages[1].lect).toMatchObject({ position: [{ email: 'preserve@example.com', title: { en: 'Admiral' } }] });
 });
@@ -137,10 +142,12 @@ it('keeps sheet-specific absent columns distinct from explicit blanks during rep
 it('continues a large legacy contact update without reapplying earlier rows', async () => {
   const f = setup(Array.from({ length: 45 }, (_, i) => person(i + 1, { first_name: { en: 'Ada' }, last_name: { en: 'Lovelace' }, position: [{}] })));
   const csv = 'contact_id,first_name,last_name,email_work_1\n' + Array.from({ length: 45 }, (_, i) => `${i + 1},Ada,Lovelace,user${i}@example.com`).join('\n');
-  const response = await worker.fetch(request('/confirm', new URLSearchParams({ csv, action: 'append' })), options);
-  const data = await response.json() as { csvText: string; offset: number; created: number; updated: number; skipped: number };
+  const review = await worker.fetch(request('', new URLSearchParams({ csv })), options);
+  const { importId } = await review.json() as { importId: string };
+  const response = await worker.fetch(request('/confirm', new URLSearchParams({ import_id: importId, action: 'append' })), options);
+  const data = await response.json() as { importId: string; offset: number };
   expect(data.offset).toBeGreaterThan(0); expect(data.offset).toBeLessThan(45);
-  const form = new URLSearchParams({ csv: data.csvText, action: 'append', offset: String(data.offset), created: String(data.created), updated: String(data.updated), skipped: String(data.skipped) });
+  const form = new URLSearchParams({ import_id: data.importId, offset: String(data.offset) });
   expect((await worker.fetch(request('/confirm', form), options)).status).toBe(302);
   expect(f.writes.filter(write => /\/pages\/\d+$/.test(write.path))).toHaveLength(45);
 });
