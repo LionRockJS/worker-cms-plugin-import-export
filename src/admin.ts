@@ -17,9 +17,8 @@ import { vcardRows } from './vcard';
 //                                      when a pass stops early, like the events
 //                                      plugin's resumable guest import)
 //
-// Every write pass is bounded by WRITE_BUDGET so one request can never blow
-// the Worker's subrequest cap on a big CSV; confirm re-parses the raw CSV
-// carried in a hidden field (small, and the server re-validates everything).
+// Confirmation applies the CSV in passes, using the offset carried in the
+// progress form to resume at the next row.
 // ============================================================
 
 import { adminView, notFoundView, parseCmsUser, redirect, serveViewAsset } from '@lionrockjs/worker-cms-plugin';
@@ -63,6 +62,9 @@ const BASE = '/admin/plugins/import-export';
 
 /** Write calls (batch create / update / tag ensure) allowed per confirm pass. */
 const WRITE_BUDGET = 40;
+const CONFIRM_ROW_LIMIT = 500;
+// Leave time for the final batch and response before the CMS proxy's 15-second deadline.
+const CONFIRM_WORK_MS = 8_000;
 const TYPE_SETUP_MAX_BYTES = 4 * 1024 * 1024;
 
 export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Promise<Response> {
@@ -94,24 +96,24 @@ export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Pr
   }
 
   try {
-    if (segments.length === 0) return home(cms, env);
+    if (segments.length === 0) return await home(cms, env);
 
     if (segments[0] === 'export' && request.method === 'GET') {
-      return exportPages(cms, url.searchParams.get('page_type') ?? segments[1] ?? '');
+      return await exportPages(cms, url.searchParams.get('page_type') ?? segments[1] ?? '');
     }
     if (segments[0] === 'export-types' && request.method === 'GET') {
-      return exportTypeSetup(cms);
+      return await exportTypeSetup(cms);
     }
     if (segments[0] === 'import-types') {
-      if (request.method === 'GET') return importTypeSetupForm(cms, env);
-      if (request.method === 'POST') return importTypeSetupPreview(cms, env, request);
+      if (request.method === 'GET') return await importTypeSetupForm(cms, env);
+      if (request.method === 'POST') return await importTypeSetupPreview(cms, env, request);
     }
     if (segments[0] === 'export-search' && request.method === 'GET') {
-      return exportSearch(cms, url);
+      return await exportSearch(cms, url);
     }
     if (segments[0] === 'import' && segments[1]) {
       const pageType = decodeURIComponent(segments[1]);
-      if (request.method === 'GET') return importForm(cms, env, pageType);
+      if (request.method === 'GET') return await importForm(cms, env, pageType);
       if (request.method === 'POST' && segments[2] === 'confirm') return await importConfirm(cms, env, request, pageType);
       if (request.method === 'POST') return await importPreview(cms, env, request, pageType);
     }
@@ -120,11 +122,13 @@ export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Pr
   } catch (error) {
     if (error instanceof ImportValidationError) return adminView(env.VIEWS, 'Import needs attention', 'error', { heading: 'Import needs attention', message: error.message });
     if (error instanceof CmsApiError) {
+      const approvalHint = error.code === 'forbidden_page_type'
+        ? ' In Plugins → Import / Export → Page types, approve Read for All page types to load the form and Write to apply imports.'
+        : '';
       return adminView(env.VIEWS, 'Import / Export', 'error', {
         heading: 'CMS request failed',
         headingKey: 'import-export.views.error.cms_request_failed',
-        message: `The CMS responded ${error.status} (${error.code}) on ${error.method} ${error.path}. `
-          + 'If this is a forbidden_page_type error, approve this plugin\'s "*" page-type access under Plugins → import-export → Page types.',
+        message: `The CMS responded ${error.status} (${error.code}) on ${error.method} ${error.path}.${approvalHint}`,
       });
     }
     throw error;
@@ -407,32 +411,27 @@ async function importForm(cms: CmsClient, env: AdminEnv, pageType: string): Prom
  * Rows resolved to types (a row's own page_type column wins over the URL's
  * type) with per-type import targets, keyed by CSV row number.
  */
-async function classifyEntries(
+async function matchEntries(
   cms: CmsClient,
   meta: ContentMeta,
-  rows: Array<Record<string, string>>,
-  pageType: string,
-  skipMatching = false,
-): Promise<{
-  entries: CsvRowEntry[];
-  targets: Map<number, CmsPage>;
-  skippedEmpty: number;
-  skippedUnknownType: number;
-}> {
-  const { entries, skippedEmpty, skippedUnknownType } = resolveImportEntries(meta, rows, pageType);
+  entries: CsvRowEntry[],
+  includeTags: boolean,
+): Promise<Map<number, CmsPage>> {
   const targets = new Map<number, CmsPage>();
-  if (!skipMatching) {
-    for (const [type, group] of groupEntriesByType(entries)) {
-      const legacy = type === 'contact' ? group.filter(entry => entry.row._eventuai_contact === '1') : [];
-      const native = group.filter(entry => type !== 'contact' || entry.row._eventuai_contact !== '1');
-      if (native.length) for (const [rowNumber, page] of matchImportTargets(native, await lookupTargets(cms, type, native))) targets.set(rowNumber, page);
-      if (legacy.length) {
-        const existing = await cms.listAll('contact', { includeTags: true });
-        for (const [rowNumber, page] of matchLegacyContacts(legacy, existing, meta)) targets.set(rowNumber, page);
-      }
+  for (const [type, group] of groupEntriesByType(entries)) {
+    const legacy = group.filter(isLegacyContactEntry);
+    const native = group.filter(entry => !isLegacyContactEntry(entry));
+    if (native.length) for (const [rowNumber, page] of matchImportTargets(native, await lookupTargets(cms, type, native, includeTags))) targets.set(rowNumber, page);
+    if (legacy.length) {
+      const existing = await cms.listAll('contact', { includeTags });
+      for (const [rowNumber, page] of matchLegacyContacts(legacy, existing, meta)) targets.set(rowNumber, page);
     }
   }
-  return { entries, targets, skippedEmpty, skippedUnknownType };
+  return targets;
+}
+
+function isLegacyContactEntry(entry: CsvRowEntry): boolean {
+  return entry.pageType === 'contact' && entry.row._eventuai_contact === '1';
 }
 
 async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pageType: string): Promise<Response> {
@@ -454,8 +453,9 @@ async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pa
 
   const scope = importScope(pageType);
   const rows = convertContactRows(importRows(csvText), pageType, meta, form.get('import_format') === 'eventuai-contact');
-  const { entries, targets, skippedEmpty, skippedUnknownType } = await classifyEntries(cms, meta, rows, pageType);
   csvText = objectsCsv(rows.map(row => ({ ...row, _import_columns: JSON.stringify(Object.keys(row)) })));
+  const { entries, skippedEmpty, skippedUnknownType } = resolveImportEntries(meta, rows, pageType);
+  const targets = await matchEntries(cms, meta, entries, false);
   const rowsByNumber = new Map(entries.map(entry => [entry.rowNumber, entry.row]));
   const previewRows = previewImportRows(meta, entries, targets).map(preview => {
     const row = rowsByNumber.get(preview.rowNumber);
@@ -490,7 +490,7 @@ async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pa
   });
 }
 
-async function lookupTargets(cms: CmsClient, pageType: string, entries: CsvRowEntry[]): Promise<CmsPage[]> {
+async function lookupTargets(cms: CmsClient, pageType: string, entries: CsvRowEntry[], includeTags: boolean): Promise<CmsPage[]> {
   const ids: number[] = [];
   const slugs: string[] = [];
   for (const { row } of entries) {
@@ -500,10 +500,11 @@ async function lookupTargets(cms: CmsClient, pageType: string, entries: CsvRowEn
     if (slug) slugs.push(slug);
   }
   if (!ids.length && !slugs.length) return [];
-  return cms.lookup(pageType, [...new Set(ids)], [...new Set(slugs)], { includeTags: true });
+  return cms.lookup(pageType, [...new Set(ids)], [...new Set(slugs)], { includeTags });
 }
 
 async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pageType: string): Promise<Response> {
+  const deadline = Date.now() + CONFIRM_WORK_MS;
   const form = await request.formData();
   const csvText = typeof form.get('csv') === 'string' ? String(form.get('csv')) : '';
   const mode = csvImportMode(typeof form.get('action') === 'string' ? String(form.get('action')) : '');
@@ -524,15 +525,20 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
 
   // `offset` counts importable entries already applied by earlier passes;
   // skipped-row counts are folded in once, on the first pass.
-  const classified = await classifyEntries(cms, meta, rows, pageType, mode === 'force-new');
-  const { targets } = classified;
-  const remaining = classified.entries.slice(offset);
+  const { entries, skippedEmpty, skippedUnknownType } = resolveImportEntries(meta, rows, pageType);
+  const passEnd = offset + CONFIRM_ROW_LIMIT;
+  const pass = entries.slice(offset, passEnd);
+  // Validate legacy identities across the remaining file before writing this pass.
+  const targets = mode === 'force-new' ? new Map<number, CmsPage>() : await matchEntries(cms, meta, [
+    ...pass,
+    ...entries.slice(passEnd).filter(isLegacyContactEntry),
+  ], true);
   const result = { ...carried };
-  if (offset === 0) result.skipped += classified.skippedEmpty + classified.skippedUnknownType;
+  if (offset === 0) result.skipped += skippedEmpty + skippedUnknownType;
 
-  // Idempotent across passes: re-ensure the tags the remaining rows mention.
+  // Re-ensure tags only for the rows eligible to run in this pass.
   const tagEntries = new Map<string, { taxonomy: string; name: string }>();
-  for (const { row } of remaining) {
+  for (const { row } of pass) {
     for (const entry of rowTagEntries(meta, row)) {
       tagEntries.set(tagKey(entry.taxonomy, entry.name), { taxonomy: entry.taxonomy, name: entry.name });
     }
@@ -566,9 +572,9 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
     pendingCreates.length = 0;
   };
 
-  for (const [index, entry] of remaining.entries()) {
-    // Reserve one write for the final create flush.
-    if (writes >= WRITE_BUDGET - 1) break;
+  for (const [index, entry] of pass.entries()) {
+    // Reserve one write for the final create flush and always make progress.
+    if (processed > 0 && (writes >= WRITE_BUDGET - 1 || Date.now() >= deadline)) break;
     const { row, pageType: rowType } = entry;
     const pathSpecs = pathSpecsFor(rowType);
 
@@ -605,7 +611,7 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
   await flushCreates();
 
   const nextOffset = offset + processed;
-  if (nextOffset < classified.entries.length) {
+  if (nextOffset < entries.length) {
     return adminView(env.VIEWS, `Importing ${scope.label}…`, 'import-progress', {
       pageType: scope.label,
       action: `${BASE}/import/${encodeURIComponent(pageType)}/confirm`,
@@ -613,7 +619,7 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
       csvText,
       mode,
       offset: nextOffset,
-      totalRows: classified.entries.length,
+      totalRows: entries.length,
       created: result.created,
       updated: result.updated,
       skipped: result.skipped,

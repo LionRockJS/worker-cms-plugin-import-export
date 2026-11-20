@@ -57,13 +57,30 @@
       {% endif %}
 
       <div class="space-y-6">
-        <section class="min-w-0">
+        <style>
+          #import-new-pages:has(#import-new-pages-toggle:not(:checked)) #import-new-pages-table,
+          #import-existing-pages:has(#import-existing-pages-toggle:not(:checked)) #import-existing-pages-table { display: none; }
+        </style>
+        <section id="import-new-pages" class="min-w-0">
           <div class="mb-2 flex items-center justify-between">
-            <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.new_pages" | t }}</h3>
+            <div class="flex items-center gap-2">
+              {% if hasNewRows %}
+                <input type="checkbox" id="import-new-pages-toggle" aria-controls="import-new-pages-table"
+                       {% if newCount <= 10 %}checked{% endif %}
+                       class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+              {% endif %}
+              <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                {% if hasNewRows %}
+                  <label for="import-new-pages-toggle" class="cursor-pointer">{{ "import-export.views.import.new_pages" | t }}</label>
+                {% else %}
+                  {{ "import-export.views.import.new_pages" | t }}
+                {% endif %}
+              </h3>
+            </div>
             <span class="text-sm text-gray-500">{{ newCount }}</span>
           </div>
           {% if hasNewRows %}
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+            <div id="import-new-pages-table" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
               <table class="w-full min-w-[560px] text-left">
                 <thead class="bg-gray-50">
                   <tr>
@@ -90,13 +107,26 @@
           {% endif %}
         </section>
 
-        <section class="min-w-0">
+        <section id="import-existing-pages" class="min-w-0">
           <div class="mb-2 flex items-center justify-between">
-            <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.existing_pages" | t }}</h3>
+            <div class="flex items-center gap-2">
+              {% if hasExistingRows %}
+                <input type="checkbox" id="import-existing-pages-toggle" aria-controls="import-existing-pages-table"
+                       {% if existingCount <= 10 %}checked{% endif %}
+                       class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+              {% endif %}
+              <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                {% if hasExistingRows %}
+                  <label for="import-existing-pages-toggle" class="cursor-pointer">{{ "import-export.views.import.existing_pages" | t }}</label>
+                {% else %}
+                  {{ "import-export.views.import.existing_pages" | t }}
+                {% endif %}
+              </h3>
+            </div>
             <span class="text-sm text-gray-500">{{ existingCount }}</span>
           </div>
           {% if hasExistingRows %}
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+            <div id="import-existing-pages-table" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
               <table class="w-full min-w-[560px] text-left">
                 <thead class="bg-gray-50">
                   <tr>
@@ -148,25 +178,33 @@
     </form>
   {% else %}
     <form method="POST" action="{{ action }}" enctype="multipart/form-data" class="min-w-0 max-w-3xl space-y-4">
+      <style>
+        #import-csv-header-toggle:not(:checked) ~ #import-csv-header,
+        #import-paste-csv-toggle:not(:checked) ~ #import-paste-csv-field { display: none; }
+      </style>
       {% if legacyContacts %}<label class="block mb-4 text-sm text-gray-700">{{ "import-export.views.import.contact_format" | t }}<select name="import_format" class="block w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="auto">{{ "import-export.views.import.contact_format_auto" | t }}</option><option value="eventuai-contact">{{ "import-export.views.import.contact_format_legacy" | t }}</option></select></label>{% endif %}
 
-      <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
-        <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">{{ "import-export.views.import.csv_header" | t }}</div>
-        <code class="block whitespace-pre-wrap break-words text-xs text-gray-600">{{ sampleCsvHeader }}</code>
-        <p class="mt-2 text-xs text-gray-500">
-          {{ "import-export.views.import.exported_csv_metadata" | t }}
-        </p>
-        {% if isAllTypes %}
+      <div>
+        <input type="checkbox" id="import-csv-header-toggle" aria-controls="import-csv-header"
+               class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+        <label for="import-csv-header-toggle" class="ml-2 cursor-pointer text-sm font-medium text-gray-700">{{ "import-export.views.import.csv_header" | t }}</label>
+        <div id="import-csv-header" class="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <code class="block whitespace-pre-wrap break-words text-xs text-gray-600">{{ sampleCsvHeader }}</code>
           <p class="mt-2 text-xs text-gray-500">
-            {{ "import-export.views.import.all_types_row_type" | t }}
-            ({{ "import-export.views.import.add_blueprint_columns" | t }} — {{ "import-export.views.home.export_all_page_types" | t }}).
-            {{ "import-export.views.import.missing_unknown_rows_skipped" | t }}
+            {{ "import-export.views.import.exported_csv_metadata" | t }}
           </p>
-        {% else %}
-          <p class="mt-2 text-xs text-gray-500">
-            {{ "import-export.views.import.single_type_override" | t }}
-          </p>
-        {% endif %}
+          {% if isAllTypes %}
+            <p class="mt-2 text-xs text-gray-500">
+              {{ "import-export.views.import.all_types_row_type" | t }}
+              ({{ "import-export.views.import.add_blueprint_columns" | t }} — {{ "import-export.views.home.export_all_page_types" | t }}).
+              {{ "import-export.views.import.missing_unknown_rows_skipped" | t }}
+            </p>
+          {% else %}
+            <p class="mt-2 text-xs text-gray-500">
+              {{ "import-export.views.import.single_type_override" | t }}
+            </p>
+          {% endif %}
+        </div>
       </div>
       <div>
         <label class="block" {% if legacyContacts %}data-import-drop-zone{% endif %}>
@@ -182,17 +220,21 @@
                data-single-file-message="{{ "import-export.views.import.drop_single_file" | t }}"></div>
         {% endif %}
       </div>
-      <label for="csv" class="block">
-        <span class="mb-1 block text-sm font-medium text-gray-700">{{ "import-export.views.import.or_paste_csv" | t }}</span>
-        <textarea id="csv" name="csv" rows="14"
-                  class="block min-w-0 w-full max-w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"></textarea>
-      </label>
+      <div>
+        <input type="checkbox" id="import-paste-csv-toggle" aria-controls="import-paste-csv-field"
+               class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+        <label id="import-paste-csv-label" for="import-paste-csv-toggle" class="ml-2 cursor-pointer text-sm font-medium text-gray-700">{{ "import-export.views.import.or_paste_csv" | t }}</label>
+        <div id="import-paste-csv-field" class="mt-2">
+          <textarea id="csv" name="csv" rows="14" aria-labelledby="import-paste-csv-label"
+                    class="block min-w-0 w-full max-w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"></textarea>
+        </div>
+      </div>
       <button type="submit"
               title="{{ "import-export.views.import.review_import" | t }}"
               aria-label="{{ "import-export.views.import.review_import" | t }}"
               class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><use href="/assets/icons.svg#upload"></use></svg>
-        <span class="hidden lg:inline">{{ "import-export.views.import.review_import" | t }}</span>
+        <span>{{ "import-export.views.import.review_import" | t }}</span>
       </button>
     </form>
     {% if legacyContacts %}
