@@ -16,23 +16,32 @@
       {{ "import-export.views.import_progress.press_continue" | t }}
     </p>
 
-    <form method="POST" action="{{ action }}">
+    <form method="POST" action="{{ action }}" {% if autoImport %}data-contact-import-auto{% endif %}>
       <textarea name="csv" class="hidden">{{ csvText }}</textarea>
       <input type="hidden" name="action" value="{{ mode }}">
       <input type="hidden" name="offset" value="{{ offset }}">
       <input type="hidden" name="created" value="{{ created }}">
       <input type="hidden" name="updated" value="{{ updated }}">
       <input type="hidden" name="skipped" value="{{ skipped }}">
+      {% if autoImport %}
+        <div class="mb-4 text-sm text-gray-700" data-import-countdown hidden>
+          <span role="status" data-import-countdown-message="{{ 'import-export.views.import.auto_countdown' | t }}"></span>
+          <button type="button" class="ml-2 font-semibold text-indigo-600 hover:underline" data-import-pause>{{ "import-export.views.import.pause_auto_import" | t }}</button>
+        </div>
+      {% endif %}
       <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <button type="submit"
                 class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-transparent bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 cursor-pointer">
           {{ "import-export.views.import_progress.continue_import" | t }}
         </button>
-        <a href="{{ backHref }}"
+        <a href="{{ backHref }}" data-stop-continue
            class="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50">
           {{ "import-export.views.common.stop_for_now" | t }}
         </a>
       </div>
     </form>
+    {% if autoImport %}
+      <script src="/admin/plugins/import-export/assets/contact-import-auto.js" defer></script>
+    {% endif %}
   </div>
 </div>

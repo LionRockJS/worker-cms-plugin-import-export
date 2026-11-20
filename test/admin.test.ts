@@ -96,14 +96,15 @@ describe('plugin worker routes', () => {
     expect(proxied.headers.get('content-type')).toContain('text/javascript');
   });
 
-  it('declares and serves the contact import drop asset for CMS approval', async () => {
+  it.each(['contact-import-drop.js', 'contact-import-auto.js'])('declares and serves %s for CMS approval', async (name) => {
+    const path = `/assets/${name}`;
     const manifest = await worker.fetch(new Request('https://plugin.local/__plugin/manifest'), env());
     expect(await manifest.json()).toMatchObject({
-      assets: expect.arrayContaining([expect.objectContaining({ path: '/assets/contact-import-drop.js' })]),
+      assets: expect.arrayContaining([expect.objectContaining({ path })]),
     });
 
-    const asset = await worker.fetch(new Request('https://plugin.local/assets/contact-import-drop.js'), env());
-    const proxied = await worker.fetch(adminRequest('/__plugin/admin/assets/contact-import-drop.js'), env());
+    const asset = await worker.fetch(new Request(`https://plugin.local${path}`), env());
+    const proxied = await worker.fetch(adminRequest(`/__plugin/admin${path}`), env());
     expect(asset.status).toBe(200);
     expect(proxied.status).toBe(200);
     expect(proxied.headers.get('content-type')).toContain('text/javascript');
@@ -134,6 +135,29 @@ describe('plugin worker routes', () => {
 });
 
 describe('import confirmation passes', () => {
+  it.each([
+    { pageType: 'contact', csv: 'name\nAda', autoImport: true },
+    { pageType: 'contact', csv: 'page_type,name\ncontact,Ada\narticle,News', autoImport: false },
+    { pageType: 'contact', csv: 'page_type,name\nunknown,Ada', autoImport: false },
+    { pageType: 'article', csv: 'name\nNews', autoImport: false },
+  ])('sets preview auto-import to $autoImport for $pageType and $csv', async ({ pageType, csv, autoImport }) => {
+    vi.stubGlobal('fetch', async (input: string) => {
+      expect(new URL(input).pathname).toBe('/__cms/content-meta');
+      return Response.json({ ...contactMeta, page_types: ['contact', 'article'] });
+    });
+    try {
+      const request = adminRequest(`/__plugin/admin/import/${pageType}`);
+      const response = await worker.fetch(new Request(request, {
+        method: 'POST',
+        body: new URLSearchParams({ csv }),
+      }), env());
+      expect(response.headers.get('x-cms-view-path')).toBe('/templates/import.json');
+      expect(await response.json()).toMatchObject({ isConfirmImport: true, autoImport });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('returns a continuation before slow updates exceed the proxy deadline', async () => {
     const csv = 'id,name\n1,Ada\n2,Bea\n3,Chloe\n4,Dina';
     const updated: string[] = [];
@@ -160,7 +184,7 @@ describe('import confirmation passes', () => {
     try {
       const first = await confirmImport(csv, { action: 'overwrite' });
       expect(first.headers.get('x-cms-view-path')).toBe('/templates/import-progress.json');
-      expect(await first.json()).toMatchObject({ offset: 2, totalRows: 4, updated: 2 });
+      expect(await first.json()).toMatchObject({ autoImport: true, offset: 2, totalRows: 4, updated: 2 });
       expect(updated).toEqual(['1', '2']);
 
       requestStarted = now;

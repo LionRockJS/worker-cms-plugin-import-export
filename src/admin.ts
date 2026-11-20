@@ -469,6 +469,7 @@ async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pa
   return adminView(env.VIEWS, `Confirm import ${scope.label}`, 'import', {
     pageType: scope.label,
     isConfirmImport: true,
+    autoImport: pageType === 'contact' && entries.length > 0 && entries.every(entry => entry.pageType === 'contact'),
     isAllTypes: scope.isAll,
     showTypeColumn: scope.isAll || typeCount > 1,
     action: `${BASE}/import/${encodeURIComponent(pageType)}/confirm`,
@@ -614,6 +615,7 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
   if (nextOffset < entries.length) {
     return adminView(env.VIEWS, `Importing ${scope.label}…`, 'import-progress', {
       pageType: scope.label,
+      autoImport: pageType === 'contact' && entries.every(entry => entry.pageType === 'contact'),
       action: `${BASE}/import/${encodeURIComponent(pageType)}/confirm`,
       backHref: scope.backHref,
       csvText,

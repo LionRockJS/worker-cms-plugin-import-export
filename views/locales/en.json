@@ -82,6 +82,8 @@
       },
       "import": {
         "confirm_import": "Confirm Import",
+        "auto_countdown": "Import starts in {seconds}s.",
+        "pause_auto_import": "Pause auto-import",
         "new_pages": "New Pages",
         "existing_pages": "Existing Pages",
         "rows": "Rows",

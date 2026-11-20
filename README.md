@@ -61,6 +61,8 @@ also available on the review screen if the asset has not been approved yet.
    `type-import.js`. The review screen still includes individual native forms if you skip this.
    Approve **Contact import drag and drop** (`contact-import-drop.js`) to enable the drop
    zone on the contact import page. The file picker is available before approval.
+   Approve **Contact import countdown** (`contact-import-auto.js`) to start the first and
+   subsequent contact import batches automatically after a three-second countdown.
 5. The sidebar gains an "Import / Export" entry under Settings. The host's per-list
    Import/Export buttons and the advanced-search "Export CSV" button link here
    automatically when the plugin is registered.

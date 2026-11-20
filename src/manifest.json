@@ -13,7 +13,8 @@
   ],
   "assets": [
     { "path": "/assets/type-import.js", "label": "Type setup importer" },
-    { "path": "/assets/contact-import-drop.js", "label": "Contact import drag and drop" }
+    { "path": "/assets/contact-import-drop.js", "label": "Contact import drag and drop" },
+    { "path": "/assets/contact-import-auto.js", "label": "Contact import countdown" }
   ],
   "contentTypes": {
     "readTypes": ["*"],

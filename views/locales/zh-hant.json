@@ -82,6 +82,8 @@
       },
       "import": {
         "confirm_import": "確認匯入",
+        "auto_countdown": "將在 {seconds} 秒後開始匯入。",
+        "pause_auto_import": "暫停自動匯入",
         "new_pages": "新頁面",
         "existing_pages": "現有頁面",
         "rows": "列",
