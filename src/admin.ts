@@ -22,7 +22,7 @@ import { vcardRows } from './vcard';
 // ============================================================
 
 import { adminView, notFoundView, parseCmsUser, redirect, serveViewAsset } from '@lionrockjs/worker-cms-plugin';
-import { CmsApiError, CmsClient, CREATE_BATCH_SIZE, chunk, tagKey, type CmsPage, type ContentMeta, type SearchCriterion } from './cms';
+import { CmsApiError, CmsClient, CREATE_BATCH_SIZE, tagKey, type CmsPage, type ContentMeta, type SearchCriterion } from './cms';
 import {
   ALL_PAGE_TYPES,
   buildContentTypeSetupExport,
@@ -62,7 +62,8 @@ const BASE = '/admin/plugins/import-export';
 
 /** Write calls (batch create / update / tag ensure) allowed per confirm pass. */
 const WRITE_BUDGET = 40;
-const CONFIRM_ROW_LIMIT = 500;
+// Return a continuation after at most four full create batches, even on fast requests.
+const CONFIRM_ROW_LIMIT = 100;
 // Leave time for the final batch and response before the CMS proxy's 15-second deadline.
 const CONFIRM_WORK_MS = 8_000;
 const TYPE_SETUP_MAX_BYTES = 4 * 1024 * 1024;
@@ -562,14 +563,12 @@ async function importConfirm(cms: CmsClient, env: AdminEnv, request: Request, pa
   const pendingCreates: PreparedCreate[] = [];
   let processed = 0;
 
-  // The batch API accepts mixed page types, so one flush covers them all.
   const flushCreates = async () => {
-    for (const part of chunk(pendingCreates, CREATE_BATCH_SIZE)) {
-      const outcome = await cms.batchCreate(part);
-      writes++;
-      result.created += outcome.created.length;
-      result.skipped += outcome.errors.length;
-    }
+    if (!pendingCreates.length) return;
+    const outcome = await cms.batchCreate(pendingCreates);
+    writes++;
+    result.created += outcome.created.length;
+    result.skipped += outcome.errors.length;
     pendingCreates.length = 0;
   };
 

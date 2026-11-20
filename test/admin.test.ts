@@ -158,6 +158,44 @@ describe('import confirmation passes', () => {
     }
   });
 
+  it('returns saved progress when two full-size CMS create calls would exceed the proxy deadline', async () => {
+    const names = Array.from({ length: 200 }, (_, i) => `Contact ${i + 1}`);
+    const csv = ['name', ...names].join('\n');
+    const saved: string[] = [];
+    const batchSizes: number[] = [];
+    let now = Date.now();
+    let requestStarted = now;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      const { pathname } = new URL(input);
+      if (pathname === '/__cms/content-meta') return Response.json(contactMeta);
+      if (pathname === '/__cms/pages/batch') {
+        const { pages } = JSON.parse(String(init?.body)) as { pages: Array<{ name: string }> };
+        now += pages.length * 76;
+        if (now - requestStarted >= 15_000) throw new DOMException('Plugin proxy deadline exceeded', 'TimeoutError');
+        batchSizes.push(pages.length);
+        saved.push(...pages.map(page => page.name));
+        return Response.json({ created: pages, errors: [] });
+      }
+      throw new Error(`Unexpected CMS request ${pathname}`);
+    });
+    try {
+      const first = await confirmImport(csv, { action: 'force-new' });
+      expect(first.headers.get('x-cms-view-path')).toBe('/templates/import-progress.json');
+      expect(await first.json()).toMatchObject({ offset: 100, totalRows: 200, created: 100 });
+      expect(saved).toEqual(names.slice(0, 100));
+
+      requestStarted = now;
+      const last = await confirmImport(csv, { action: 'force-new', offset: '100', created: '100' });
+      expect(decodeURIComponent(last.headers.get('location')!)).toContain('200 created, 0 updated, 0 skipped');
+      expect(batchSizes).toEqual(Array(8).fill(25));
+      expect(saved).toEqual(names);
+    } finally {
+      clock.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('returns a continuation before slow updates exceed the proxy deadline', async () => {
     const csv = 'id,name\n1,Ada\n2,Bea\n3,Chloe\n4,Dina';
     const updated: string[] = [];
@@ -199,7 +237,7 @@ describe('import confirmation passes', () => {
   });
 
   it('leaves tags for rows beyond the current pass to the continuation', async () => {
-    const csv = ['name,tag:Industry', ...Array.from({ length: 500 }, (_, i) => `Contact ${i + 1},`), 'Last contact,Technology'].join('\n');
+    const csv = ['name,tag:Industry', ...Array.from({ length: 100 }, (_, i) => `Contact ${i + 1},`), 'Last contact,Technology'].join('\n');
     const requests: string[] = [];
     vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
       const { pathname } = new URL(input);
@@ -212,13 +250,13 @@ describe('import confirmation passes', () => {
     try {
       const first = await confirmImport(csv, { action: 'force-new' });
       expect(first.headers.get('x-cms-view-path')).toBe('/templates/import-progress.json');
-      expect(await first.json()).toMatchObject({ offset: 500, totalRows: 501, created: 500 });
+      expect(await first.json()).toMatchObject({ offset: 100, totalRows: 101, created: 100 });
       expect(requests).not.toContain('/__cms/tags/ensure');
 
       requests.length = 0;
-      const last = await confirmImport(csv, { action: 'force-new', offset: '500', created: '500' });
+      const last = await confirmImport(csv, { action: 'force-new', offset: '100', created: '100' });
       expect(requests).toEqual(['/__cms/content-meta', '/__cms/tags/ensure', '/__cms/pages/batch']);
-      expect(decodeURIComponent(last.headers.get('location')!)).toContain('501 created, 0 updated, 0 skipped');
+      expect(decodeURIComponent(last.headers.get('location')!)).toContain('101 created, 0 updated, 0 skipped');
     } finally {
       vi.unstubAllGlobals();
     }
