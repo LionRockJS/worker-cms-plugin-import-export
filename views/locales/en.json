@@ -87,6 +87,7 @@
       },
       "import": {
         "confirm_import": "Confirm Import",
+        "missing_taxonomies": "Confirming the import will create these taxonomies where needed.",
         "auto_countdown": "Import starts in {seconds}s.",
         "pause_auto_import": "Pause auto-import",
         "new_pages": "New Pages",

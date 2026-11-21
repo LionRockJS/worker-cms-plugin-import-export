@@ -6,7 +6,7 @@ import worker, { importSessions } from './worker';
 import { legacyContactRow, matchLegacyContacts } from '../src/legacy-contacts';
 import { vcardRows } from '../src/vcard';
 import { csvImportPathSpecs, prepareCreateFromRow, prepareUpdateFromRow, setLectPathValue, type Lect } from '../src/csv';
-import type { ContentMeta, CmsPage } from '../src/cms';
+import { tagKey, type ContentMeta, type CmsPage } from '../src/cms';
 
 const meta: ContentMeta = { page_types: ['contact', 'default'], languages: ['en', 'zh-hant', 'zh-hans'], default_language: 'en', path_specs: { contact: [{ path: 'first_name', kind: 'localized' }, { path: 'last_name', kind: 'localized' }, { path: 'source', kind: 'scalar' }], default: [] }, taxonomies: [{ name: 'Contact Type', slug: 'contact-type' }] };
 function person(id = 1, lect: Lect = {}): CmsPage {
@@ -45,7 +45,7 @@ describe('legacy contact mapping and matching', () => {
   it('maps localized names, numbered positions/assistants, phones, tags and preserves unknown columns', () => {
     const row = legacyContactRow({ contact_id: '1', no: '0001', first_name: 'Ada', last_name: 'Lovelace', chinese_name_tc: '愛達', source: 'Legacy', company_1: 'Company A', company_2: 'Company B', email_work_2: 'second@example.com', work_phone_2_direct: '0012345', assistants_2_name: 'Assistant', assistants_2_email: 'pa@example.com', email_personal_1: 'ada@example.com', food_allergies_preferences_1: 'Nuts', contact_type_1: 'VIP', bio_background: 'First\n\nSecond', custom_note: 'Keep me' }, 'en');
     const specs = csvImportPathSpecs(meta, ['contact'], Object.keys(row));
-    const input = prepareCreateFromRow(meta, 'contact', row, specs, new Map([['contact-type VIP', 1]]));
+    const input = prepareCreateFromRow(meta, 'contact', row, specs, new Map([[tagKey('contact-type', 'VIP'), 1]]));
     expect(input).toMatchObject({ name: 'Ada Lovelace', slug: '0001', lect: { first_name: { en: 'Ada', 'zh-hant': '愛達' }, bio: { en: 'First\n\nSecond' }, position: [{ organization_name: { en: 'Company A' } }, { organization_name: { en: 'Company B' }, email: 'second@example.com', direct_phone: '0012345' }], assistant: [undefined, { name: { en: 'Assistant' }, email: 'pa@example.com' }], legacy_import: { custom_note: 'Keep me' } }, tags: [1] });
     expect(input.lect).not.toHaveProperty('_eventuai_contact');
   });

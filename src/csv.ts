@@ -10,7 +10,7 @@ import { ImportValidationError } from './import-upload';
 // The pure CSV/lect logic below is unchanged in behaviour.
 // ============================================================
 
-import type { BlueprintPathKind, CmsPage, ContentMeta, PageTag } from './cms';
+import { tagKey, type BlueprintPathKind, type CmsPage, type ContentMeta, type PageTag } from './cms';
 
 export type Lect = Record<string, unknown>;
 export type LectItem = Record<string, unknown>;
@@ -1181,7 +1181,7 @@ export function prepareCreateFromRow(
 function rowTagIds(meta: ContentMeta, row: Record<string, string>, ensuredTags: Map<string, number>): number[] {
   const ids: number[] = [];
   for (const entry of rowTagEntries(meta, row)) {
-    const id = ensuredTags.get(`${entry.taxonomy} ${entry.name}`);
+    const id = ensuredTags.get(tagKey(entry.taxonomy, entry.name));
     if (id !== undefined && !ids.includes(id)) ids.push(id);
   }
   return ids;

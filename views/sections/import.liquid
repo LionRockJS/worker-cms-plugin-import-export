@@ -29,6 +29,12 @@
       </div>
     {% endif %}
 
+    {% if hasMissingTaxonomies %}
+      <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        {{ "import-export.views.import.missing_taxonomies" | t }} {{ missingTaxonomies | join: ", " }}
+      </div>
+    {% endif %}
+
     <form method="POST" action="{{ action }}" class="min-w-0">
       <input type="hidden" name="import_id" value="{{ importId }}">
 

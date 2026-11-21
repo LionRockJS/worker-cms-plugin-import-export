@@ -21,7 +21,7 @@ import { vcardRows } from './vcard';
 // ============================================================
 
 import { adminView, notFoundView, parseCmsUser, redirect, serveViewAsset } from '@lionrockjs/worker-cms-plugin';
-import { CmsApiError, CmsClient, CREATE_BATCH_SIZE, tagKey, type CmsPage, type ContentMeta, type SearchCriterion } from './cms';
+import { CmsApiError, CmsClient, CREATE_BATCH_SIZE, ENSURE_TAGS_CHUNK, ENSURE_TAXONOMIES_CHUNK, tagKey, type CmsPage, type ContentMeta, type SearchCriterion } from './cms';
 import type { ImportSession } from './import-session';
 import {
   ALL_PAGE_TYPES,
@@ -62,7 +62,7 @@ export interface AdminEnv {
 /** Base path of this plugin's admin UI on the CMS origin (forms/links must use it). */
 const BASE = '/admin/plugins/import-export';
 
-/** Write calls (batch create / update / tag ensure) allowed per confirm pass. */
+/** Write calls allowed per confirm pass. */
 const WRITE_BUDGET = 40;
 // Return a continuation after at most four full create batches, even on fast requests.
 const CONFIRM_ROW_LIMIT = 100;
@@ -133,9 +133,11 @@ export async function handleAdmin(request: Request, env: AdminEnv, url: URL): Pr
 export function importErrorView(views: Fetcher, error: unknown): Promise<Response> {
   if (error instanceof ImportValidationError) return adminView(views, 'Import needs attention', 'error', { heading: 'Import needs attention', message: error.message });
   if (error instanceof CmsApiError) {
-    const approvalHint = error.code === 'forbidden_page_type'
-      ? ' In Plugins → Import / Export → Page types, approve Read for All page types to load the form and Write to apply imports.'
-      : '';
+    const approvalHint = error.path === '/taxonomies/ensure' && (error.status === 404 || error.status === 405)
+      ? ' Update the destination CMS to enable automatic taxonomy creation, or create the missing taxonomies in its admin first.'
+      : error.code === 'forbidden_page_type'
+        ? ' In Plugins → Import / Export → Page types, approve Read for All page types to load the form and Write to apply imports.'
+        : '';
     return adminView(views, 'Import / Export', 'error', {
       heading: 'CMS request failed',
       headingKey: 'import-export.views.error.cms_request_failed',
@@ -478,6 +480,7 @@ async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pa
   const rows = convertContactRows(importRows(csvText), pageType, meta, form.get('import_format') === 'eventuai-contact');
   csvText = objectsCsv(rows.map(row => ({ ...row, _import_columns: JSON.stringify(Object.keys(row)) })));
   const { entries, skippedEmpty, skippedUnknownType } = resolveImportEntries(meta, rows, pageType);
+  const missingTaxonomies = missingContactTaxonomies(meta, entries);
   const targets = await matchEntries(cms, meta, entries, false);
   const rowsByNumber = new Map(entries.map(entry => [entry.rowNumber, entry.row]));
   const previewRows = previewImportRows(meta, entries, targets).map(preview => {
@@ -509,6 +512,8 @@ async function importPreview(cms: CmsClient, env: AdminEnv, request: Request, pa
     existingCount: existingRows.length,
     skippedCount: skippedEmpty + skippedUnknownType,
     skippedUnknownType,
+    missingTaxonomies,
+    hasMissingTaxonomies: missingTaxonomies.length > 0,
     importModeOptions: csvImportModeOptions(),
     hasImportModeOptions: true,
   });
@@ -559,7 +564,7 @@ export async function applyImportPass(
 ): Promise<ImportProgress> {
   const deadline = Date.now() + CONFIRM_WORK_MS;
   const offset = progress?.offset ?? 0;
-  const meta = await cms.meta('all');
+  let meta = await cms.meta('all');
   const rows = convertContactRows(importRows(csvText), pageType, meta);
   let writes = 0;
 
@@ -576,20 +581,26 @@ export async function applyImportPass(
   const result = { created: progress?.created ?? 0, updated: progress?.updated ?? 0, skipped: progress?.skipped ?? 0 };
   if (offset === 0) result.skipped += skippedEmpty + skippedUnknownType;
 
-  // Re-ensure tags only for the rows eligible to run in this pass.
+  const applying = pass.filter(({ rowNumber }) => targets.has(rowNumber)
+    ? mode !== 'new'
+    : mode !== 'append' && mode !== 'overwrite');
+  const missingTaxonomies = missingContactTaxonomies(meta, applying);
+  if (missingTaxonomies.length) {
+    const taxonomies = await cms.ensureContactTaxonomies(missingTaxonomies);
+    meta = { ...meta, taxonomies: [...meta.taxonomies, ...taxonomies] };
+    writes += Math.ceil(missingTaxonomies.length / ENSURE_TAXONOMIES_CHUNK);
+  }
+
+  // Taxonomy and tag provisioning are repeatable. Mark the pass as writing
+  // only when a contact or other page is about to change.
   const tagEntries = new Map<string, { taxonomy: string; name: string }>();
-  for (const { row } of pass) {
+  for (const { row } of applying) {
     for (const entry of rowTagEntries(meta, row)) {
       tagEntries.set(tagKey(entry.taxonomy, entry.name), { taxonomy: entry.taxonomy, name: entry.name });
     }
   }
-  const ensuredTags = tagEntries.size
-    ? await (async () => {
-      await beforeWrite();
-      writes += Math.ceil(tagEntries.size / 200);
-      return cms.ensureTags([...tagEntries.values()]);
-    })()
-    : new Map<string, number>();
+  writes += Math.ceil(tagEntries.size / ENSURE_TAGS_CHUNK);
+  const ensuredTags = await cms.ensureTags([...tagEntries.values()]);
 
   const csvHeaders = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   const specsByType = new Map<string, ReturnType<typeof csvPathSpecs>>();
@@ -691,9 +702,25 @@ function importRows(csv: string): Array<Record<string, string>> {
 }
 function convertContactRows(rows: Array<Record<string, string>>, fallback: string, meta: ContentMeta, force = false): Array<Record<string, string>> {
   return rows.map(row => {
-    const type = row.page_type || fallback;
-    const converted = type === 'contact' && row._eventuai_contact !== '1' && (force || isLegacyContactRow(row)) ? legacyContactRow(row, meta.default_language) : row;
-    for (const [key, value] of Object.entries(converted)) if (value && key.startsWith('tag:') && converted._eventuai_contact === '1' && !meta.taxonomies.some(taxonomy => taxonomy.name === key.slice(4))) throw new ImportValidationError(`Configure the “${key.slice(4)}” taxonomy before importing these contact tags.`);
-    return converted;
+    const type = row.page_type?.trim() || fallback;
+    if (type === 'contact' && row._eventuai_contact !== '1' && (force || isLegacyContactRow(row))) {
+      return legacyContactRow(row, meta.default_language);
+    }
+    return row;
   });
+}
+
+function missingContactTaxonomies(meta: ContentMeta, entries: CsvRowEntry[]): string[] {
+  const existing = new Set(meta.taxonomies.map(({ name }) => name));
+  const missing = new Set<string>();
+  for (const { row, pageType } of entries) {
+    if (pageType !== 'contact') continue;
+    for (const [column, value] of Object.entries(row)) {
+      if (!column.startsWith('tag:') || !value.split(';').some(tag => tag.trim())) continue;
+      const name = column.slice(4);
+      if (!name || name !== name.trim()) throw new ImportValidationError(`Use a taxonomy name immediately after “tag:” in the “${column}” column.`);
+      if (!existing.has(name)) missing.add(name);
+    }
+  }
+  return [...missing];
 }

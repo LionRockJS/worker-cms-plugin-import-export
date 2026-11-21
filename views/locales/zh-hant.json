@@ -87,6 +87,7 @@
       },
       "import": {
         "confirm_import": "確認匯入",
+        "missing_taxonomies": "確認匯入後，系統會按需要建立以下分類。",
         "auto_countdown": "將在 {seconds} 秒後開始匯入。",
         "pause_auto_import": "暫停自動匯入",
         "new_pages": "新頁面",

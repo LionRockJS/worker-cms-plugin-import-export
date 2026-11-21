@@ -300,12 +300,20 @@ describe('import confirmation passes', () => {
   it('leaves tags for rows beyond the current pass to the continuation', async () => {
     const csv = ['name,tag:Industry', ...Array.from({ length: 100 }, (_, i) => `Contact ${i + 1},`), 'Last contact,Technology'].join('\n');
     const requests: string[] = [];
+    const savedTags: number[][] = [];
     vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
       const { pathname } = new URL(input);
       requests.push(pathname);
       if (pathname === '/__cms/content-meta') return Response.json(contactMeta);
-      if (pathname === '/__cms/pages/batch') return Response.json({ created: JSON.parse(String(init?.body)).pages, errors: [] });
-      if (pathname === '/__cms/tags/ensure') return Response.json({ tags: [{ taxonomy: 'industry', name: 'Technology', id: 1 }] });
+      if (pathname === '/__cms/pages/batch') {
+        const { pages } = JSON.parse(String(init?.body)) as { pages: Array<{ tags: number[] }> };
+        savedTags.push(...pages.map(page => page.tags));
+        return Response.json({ created: pages, errors: [] });
+      }
+      if (pathname === '/__cms/tags/ensure') {
+        expect(JSON.parse(String(init?.body))).toEqual({ tags: [{ taxonomy: 'industry', name: 'Technology' }] });
+        return Response.json({ tags: [{ taxonomy: 'industry', name: 'Technology', id: 1 }] });
+      }
       throw new Error(`Unexpected CMS request ${pathname}`);
     });
     try {
@@ -319,6 +327,96 @@ describe('import confirmation passes', () => {
       const last = await confirmImport(importId, { offset: '100' });
       expect(requests).toEqual(['/__cms/content-meta', '/__cms/tags/ensure', '/__cms/pages/batch']);
       expect(decodeURIComponent(last.headers.get('location')!)).toContain('101 created, 0 updated, 0 skipped');
+      expect(savedTags.at(-1)).toEqual([1]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each([
+    'name,tag:Interest\nAda,Photography',
+    'no,first_name,interest_1\n001,Ada,Photography',
+    'no,first_name,tag:Interest\n001,Ada,Photography',
+  ])('previews missing taxonomies and creates them on confirmation', async (csv) => {
+    const writes: string[] = [];
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      const { pathname } = new URL(input);
+      if (pathname === '/__cms/content-meta') return Response.json(contactMeta);
+      if (pathname === '/__cms/pages') return Response.json({ pages: [], total: 0 });
+      writes.push(pathname);
+      const body = JSON.parse(String(init?.body));
+      if (pathname === '/__cms/taxonomies/ensure') {
+        expect(body).toEqual({ names: ['Interest'] });
+        return Response.json({ taxonomies: [{ name: 'Interest', slug: 'interest-2' }] });
+      }
+      if (pathname === '/__cms/tags/ensure') {
+        expect(body).toEqual({ tags: [{ taxonomy: 'interest-2', name: 'Photography' }] });
+        return Response.json({ tags: [{ taxonomy: 'interest-2', name: 'Photography', id: 23 }] });
+      }
+      if (pathname === '/__cms/pages/batch') {
+        expect(body.pages).toMatchObject([{ name: 'Ada', tags: [23] }]);
+        return Response.json({ created: body.pages, errors: [] });
+      }
+      throw new Error(`Unexpected CMS request ${pathname}`);
+    });
+    const request = adminRequest('/__plugin/admin/import/contact');
+    try {
+      const response = await worker.fetch(new Request(request, {
+        method: 'POST',
+        body: new URLSearchParams({ csv }),
+      }), env());
+      const preview = await response.json() as { importId: string };
+      expect(preview).toMatchObject({ hasMissingTaxonomies: true, missingTaxonomies: ['Interest'] });
+      expect(writes).toEqual([]);
+
+      const confirmed = await confirmImport(preview.importId);
+      expect(decodeURIComponent(confirmed.headers.get('location')!)).toContain('1 created, 0 updated, 0 skipped');
+      expect(writes).toEqual(['/__cms/taxonomies/ensure', '/__cms/tags/ensure', '/__cms/pages/batch']);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('does not provision taxonomies for a contact skipped by the import mode', async () => {
+    const fetchCms = vi.fn(async () => Response.json(contactMeta));
+    vi.stubGlobal('fetch', fetchCms);
+    try {
+      const importId = await reviewContact('name,tag:Interest\nAda,Photography');
+      const confirmed = await confirmImport(importId, { action: 'append' });
+      expect(decodeURIComponent(confirmed.headers.get('location')!)).toContain('0 created, 0 updated, 1 skipped');
+      expect(fetchCms).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('can confirm again after taxonomy provisioning fails before a contact write', async () => {
+    let provisioned = false;
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      const { pathname } = new URL(input);
+      if (pathname === '/__cms/content-meta') return Response.json(contactMeta);
+      if (pathname === '/__cms/taxonomies/ensure') {
+        if (!provisioned) return new Response('Not Found', { status: 404 });
+        return Response.json({ taxonomies: [{ name: 'Interest', slug: 'interest' }] });
+      }
+      if (pathname === '/__cms/tags/ensure') return Response.json({ tags: [{ taxonomy: 'interest', name: 'Photography', id: 23 }] });
+      if (pathname === '/__cms/pages' && init?.method === 'GET') {
+        return Response.json({ pages: [{ id: 42, name: 'Ada', tags: [] }] });
+      }
+      if (pathname === '/__cms/pages/42' && init?.method === 'PUT') {
+        expect(JSON.parse(String(init.body))).toMatchObject({ tags: [23] });
+        return Response.json({ page: { id: 42 } });
+      }
+      throw new Error(`Unexpected CMS request ${pathname}`);
+    });
+    try {
+      const importId = await reviewContact('id,name,tag:Interest\n42,Ada,Photography');
+      const first = await confirmImport(importId, { action: 'append' });
+      expect(await first.json()).toMatchObject({ message: expect.stringContaining('Update the destination CMS') });
+
+      provisioned = true;
+      const confirmed = await confirmImport(importId, { action: 'append' });
+      expect(decodeURIComponent(confirmed.headers.get('location')!)).toContain('0 created, 1 updated, 0 skipped');
     } finally {
       vi.unstubAllGlobals();
     }

@@ -18,7 +18,7 @@ import {
   previewImportRows,
   resolveImportEntries,
 } from '../src/csv';
-import type { CmsPage, ContentMeta } from '../src/cms';
+import { tagKey, type CmsPage, type ContentMeta } from '../src/cms';
 
 const meta: ContentMeta = {
   page_types: ['default'],
@@ -265,7 +265,7 @@ describe('import apply', () => {
 
   it('prepares a create input with lect values and ensured tag ids', () => {
     const row = { 'name.en': 'Fresh', status: 'draft', 'tag:Topic': 'News; Blog', weight: '3' };
-    const ensured = new Map([['topic News', 9], ['topic Blog', 10]]);
+    const ensured = new Map([[tagKey('topic', 'News'), 9], [tagKey('topic', 'Blog'), 10]]);
     const create = prepareCreateFromRow(meta, 'default', row, specs, ensured);
     expect(create.name).toBe('Fresh');
     expect(create.weight).toBe(3);
@@ -339,7 +339,7 @@ describe('import apply', () => {
       tags: [{ id: 1, name: 'Old', taxonomy: 'Topic', taxonomy_slug: 'topic' }],
     });
     const row = { 'tag:Topic': 'News' };
-    const ensured = new Map([['topic News', 9]]);
+    const ensured = new Map([[tagKey('topic', 'News'), 9]]);
     const update = prepareUpdateFromRow(meta, 'default', row, existing, specs, 'replace', ensured);
     expect(update.changed).toBe(true);
     expect(update.input.tags).toEqual([9]);

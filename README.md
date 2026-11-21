@@ -31,7 +31,9 @@ authenticated type-admin routes.
 - **Import** with preview: rows are matched to existing pages by `id` (preferred) or
   `slug`, previewed as create/update tables, then applied with one of six modes
   (new only, fill blanks, replace fields, force-new, …) — the same semantics the host's
-  built-in importer had. Tags are created on demand. Large files apply in budgeted
+  built-in importer had. Contact imports preview missing taxonomies referenced by
+  tag columns. Confirmation creates the taxonomies as needed, then creates or reuses
+  the tags and attaches them to the contacts. Large files apply in budgeted
   passes with a "Continue import" step so a single request never blows the Worker
   subrequest cap. Review waits for explicit confirmation. A Durable Object stages
   the upload for confirmation and continuation, deletes the source when the import
@@ -123,3 +125,5 @@ secret` / `.dev.vars`) and the plugin synthesizes one tenant with no KV needed �
 - Requires host CMS ≥ the version that ships `GET /__cms/content-meta`,
   `POST /__cms/tags/ensure`, and the `ids`/`slugs`/`include_tags` parameters on
   `GET /__cms/pages` (added together with this plugin's extraction).
+- Automatic taxonomy creation for contact imports requires a destination CMS with
+  `POST /__cms/taxonomies/ensure` and delegated contact write access for Import / Export.

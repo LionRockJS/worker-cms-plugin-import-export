@@ -50,6 +50,11 @@ export function legacyContactRow(input: Row, language: string): Row {
     const keys = Object.keys(raw).filter(key => key === source || new RegExp(`^${source}(?:_\\d+|_seperate_by_\\d+|_preferences_\\d+)$`).test(key));
     if (keys.length) { row[`tag:${taxonomy}`] = keys.map(key => raw[key]).filter(Boolean).join('; '); keys.forEach(key => consumed.add(key)); }
   }
+  for (const [column, value] of Object.entries(input)) {
+    if (!column.startsWith('tag:')) continue;
+    row[column] = [row[column], value].filter(Boolean).join('; ');
+    consumed.add(legacyHeader(column));
+  }
   // Unknown columns are retained under an explicit namespace rather than silently discarded.
   for (const [key, value] of Object.entries(raw)) if (!consumed.has(key)) row[`legacy_import.${key}`] = value;
   row.name = [raw.first_name || raw.chinese_name_tc || raw.chinese_name_sc, raw.middle_name, raw.last_name].filter(Boolean).join(' ').trim() || raw.full_name || raw.name || '';

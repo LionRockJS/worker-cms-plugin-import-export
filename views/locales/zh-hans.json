@@ -87,6 +87,7 @@
       },
       "import": {
         "confirm_import": "确认导入",
+        "missing_taxonomies": "确认导入后，系统会按需创建以下分类。",
         "auto_countdown": "将在 {seconds} 秒后开始导入。",
         "pause_auto_import": "暂停自动导入",
         "new_pages": "新页面",
