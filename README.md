@@ -126,4 +126,4 @@ secret` / `.dev.vars`) and the plugin synthesizes one tenant with no KV needed �
   `POST /__cms/tags/ensure`, and the `ids`/`slugs`/`include_tags` parameters on
   `GET /__cms/pages` (added together with this plugin's extraction).
 - Automatic taxonomy creation for contact imports requires a destination CMS with
-  `POST /__cms/taxonomies/ensure` and delegated contact write access for Import / Export.
+  `POST /__cms/taxonomies/ensure` and explicit approval of the **Create taxonomies** capability under **Plugins → Import / Export → Page types**. Contact writes still require their own page-type approval.

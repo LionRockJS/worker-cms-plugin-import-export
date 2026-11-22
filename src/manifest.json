@@ -3,6 +3,7 @@
   "name": "Import / Export",
   "version": "0.1.0",
   "trustLevel": "trusted-ui",
+  "capabilities": ["taxonomy:create"],
   "autoTenant": true,
   "i18n": true,
   "nav": [
